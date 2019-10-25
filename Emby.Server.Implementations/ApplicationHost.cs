@@ -747,7 +747,7 @@ namespace Emby.Server.Implementations
             ProcessFactory = new ProcessFactory();
             serviceCollection.AddSingleton(ProcessFactory);
 
-            serviceCollection.AddSingleton(typeof(IStreamHelper), typeof(StreamHelper));
+            serviceCollection.AddSingleton(typeof(IStreamHelper), typeof(PipeStreamHelper));
 
             serviceCollection.AddSingleton(typeof(ICryptoProvider), typeof(CryptographyProvider));
 
