@@ -21,7 +21,7 @@ namespace Emby.Server.Implementations.Activity
         public ActivityRepository(ILoggerFactory loggerFactory, IServerApplicationPaths appPaths, IFileSystem fileSystem)
             : base(loggerFactory.CreateLogger(nameof(ActivityRepository)))
         {
-            DbFilePath = Path.Combine(appPaths.DataPath, "activitylog.db");
+                DbFilePath = Path.Combine(appPaths.DataPath, "activitylog.db");
             _fileSystem = fileSystem;
         }
 

@@ -1,12 +1,110 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.IO;
+using Pipelines.Sockets.Unofficial;
 
 namespace Emby.Server.Implementations.IO
 {
+    public class PipeStreamHelper : IStreamHelper
+    {
+        private const int StreamCopyToBufferSize = 81920;
+
+        public Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
+        {
+            return CopyToAsync(source, destination, cancellationToken, buffersize: bufferSize, onStarted: onStarted);
+        }
+
+        public Task CopyToAsync(Stream source, Stream destination, int bufferSize, int emptyReadLimit, CancellationToken cancellationToken)
+        {
+            return CopyToAsync(source, destination, cancellationToken, buffersize: bufferSize, emptyReadLimit: emptyReadLimit);
+        }
+
+        public Task<int> CopyToAsync(Stream source, Stream destination, CancellationToken cancellationToken)
+        {
+            return CopyToAsync(source, destination, cancellationToken);
+        }
+
+        public Task CopyToAsync(Stream source, Stream destination, long copyLength, CancellationToken cancellationToken)
+        {
+            return CopyToAsync(source, destination, cancellationToken, copyLength: copyLength);
+        }
+
+        public Task CopyUntilCancelled(Stream source, Stream destination, int bufferSize, CancellationToken cancellationToken)
+        {
+            return CopyToAsync(source, destination, cancellationToken, buffersize: bufferSize, copyUntilCancelled: true);
+        }
+
+        private async Task CopyToAsync(
+            Stream source,
+            Stream destination,
+            CancellationToken cancellationToken,
+            int? buffersize = null,
+            int emptyReadLimit = 0,
+            long? copyLength = null,
+            Action onStarted = null,
+            bool copyUntilCancelled = false)
+        {
+            var counter = 0L;
+            var eofCount = 0;
+            var writer = StreamConnection.GetWriter(destination);
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var memory = writer.GetMemory(buffersize ?? StreamCopyToBufferSize);
+                try
+                {
+                    if (copyLength.HasValue && (counter + memory.Length) > copyLength)
+                    {
+                        var buffer = new byte[copyLength.Value - counter];
+                        memory = buffer.AsMemory();
+                    }
+
+                    int bytesRead = await source.ReadAsync(memory, cancellationToken);
+                    counter += bytesRead;
+
+                    if (onStarted != null)
+                    {
+                        onStarted();
+                        onStarted = null;
+                    }
+
+                    if (bytesRead == 0)
+                    {
+                        if (!copyUntilCancelled && ++eofCount > emptyReadLimit)
+                            break;
+
+                        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        eofCount = 0;
+                    }
+
+                    // Notify the writer how many bytes were read
+                    writer.Advance(bytesRead);
+
+                    if (counter >= copyLength)
+                        break;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                    break;
+                }
+
+                // Make the data available to the reader which runs the ReadAsync call
+                var result = await writer.FlushAsync();
+
+                if (result.IsCompleted)
+                    break;
+            }
+        }
+    }
+
     public class StreamHelper : IStreamHelper
     {
         private const int StreamCopyToBufferSize = 81920;
