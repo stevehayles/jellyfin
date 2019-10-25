@@ -2726,7 +2726,8 @@ namespace MediaBrowser.Controller.MediaEncoding
 
                 if (!state.RunTimeTicks.HasValue)
                 {
-                    args += " -flags -global_header";
+                    if (string.Compare(state.OutputContainer, "mkv", true) != 0)
+                        args += " -flags -global_header";
                 }
             }
 
