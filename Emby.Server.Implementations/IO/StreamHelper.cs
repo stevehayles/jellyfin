@@ -43,7 +43,7 @@ namespace Emby.Server.Implementations.IO
             Stream destination,
             CancellationToken cancellationToken,
             int? buffersize = null,
-            int emptyReadLimit = 0,
+            int emptyReadLimit = -1,
             long? copyLength = null,
             Action onStarted = null,
             bool copyUntilCancelled = false)
@@ -74,10 +74,18 @@ namespace Emby.Server.Implementations.IO
 
                     if (bytesRead == 0)
                     {
-                        if (!copyUntilCancelled && ++eofCount > emptyReadLimit)
+                        if (copyUntilCancelled)
+                        {
+                            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                        }
+                        else if (emptyReadLimit > 0 && ++eofCount < emptyReadLimit)
+                        {
+                            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        {
                             break;
-
-                        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+                        }   
                     }
                     else
                     {
