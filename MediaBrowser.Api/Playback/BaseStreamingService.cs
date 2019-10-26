@@ -231,7 +231,7 @@ namespace MediaBrowser.Api.Playback
                     RedirectStandardInput = true,
 
                     FileName = MediaEncoder.EncoderPath,
-                    Arguments = GetCommandLineArguments(outputPath, encodingOptions, state, true) + " -loglevel debug",
+                    Arguments = "-loglevel debug " + GetCommandLineArguments(outputPath, encodingOptions, state, true),
                     WorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory) ? null : workingDirectory,
 
                     ErrorDialog = false
