@@ -93,7 +93,7 @@ namespace Emby.Server.Implementations.Configuration
 
             ((ServerApplicationPaths)ApplicationPaths).TranscodingTempPath = string.IsNullOrEmpty(encodingConfig.TranscodingTempPath) ?
                 null :
-                Path.Combine(encodingConfig.TranscodingTempPath, "transcodes");
+                Path.Combine(((ServerApplicationPaths)ApplicationPaths).DefaultTranscodingTempPath, "transcodes");
         }
 
         protected override void OnNamedConfigurationUpdated(string key, object configuration)
