@@ -67,8 +67,6 @@ namespace MediaBrowser.Controller.Entities
             return base.GetDefaultPrimaryImageAspectRatio();
         }
 
-        public new int? Width { get; set; }
-        public new int? Height { get; set; }
         public string CameraMake { get; set; }
         public string CameraModel { get; set; }
         public string Software { get; set; }
