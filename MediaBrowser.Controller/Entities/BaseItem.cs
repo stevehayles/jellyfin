@@ -2906,8 +2906,8 @@ namespace MediaBrowser.Controller.Entities
         public virtual bool IsHD => Height >= 720;
         public bool IsShortcut { get; set; }
         public string ShortcutPath { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
+        public int? Width { get; set; }
+        public int? Height { get; set; }
         public Guid[] ExtraIds { get; set; }
         public virtual long GetRunTimeTicksForPlayState()
         {
