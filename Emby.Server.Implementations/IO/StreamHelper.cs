@@ -15,30 +15,30 @@ namespace Emby.Server.Implementations.IO
 
         public Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
         {
-            return CopyToAsync(source, destination, cancellationToken, buffersize: bufferSize, onStarted: onStarted);
+            return CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, onStarted: onStarted);
         }
 
         public Task CopyToAsync(Stream source, Stream destination, int bufferSize, int emptyReadLimit, CancellationToken cancellationToken)
         {
-            return CopyToAsync(source, destination, cancellationToken, buffersize: bufferSize, emptyReadLimit: emptyReadLimit);
+            return CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, emptyReadLimit: emptyReadLimit);
         }
 
         public Task<int> CopyToAsync(Stream source, Stream destination, CancellationToken cancellationToken)
         {
-            return CopyToAsync(source, destination, cancellationToken);
+            return CopyToAsyncInternal(source, destination, cancellationToken);
         }
 
         public Task CopyToAsync(Stream source, Stream destination, long copyLength, CancellationToken cancellationToken)
         {
-            return CopyToAsync(source, destination, cancellationToken, copyLength: copyLength);
+            return CopyToAsyncInternal(source, destination, cancellationToken, copyLength: copyLength);
         }
 
         public Task CopyUntilCancelled(Stream source, Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
-            return CopyToAsync(source, destination, cancellationToken, buffersize: bufferSize, copyUntilCancelled: true);
+            return CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, copyUntilCancelled: true);
         }
 
-        private async Task CopyToAsync(
+        private async Task<int> CopyToAsyncInternal(
             Stream source,
             Stream destination,
             CancellationToken cancellationToken,
@@ -48,7 +48,7 @@ namespace Emby.Server.Implementations.IO
             Action onStarted = null,
             bool copyUntilCancelled = false)
         {
-            var counter = 0L;
+            var totalBytesRead = 0L;
             var eofCount = 0;
             var writer = StreamConnection.GetWriter(destination);
 
@@ -57,14 +57,14 @@ namespace Emby.Server.Implementations.IO
                 var memory = writer.GetMemory(buffersize ?? StreamCopyToBufferSize);
                 try
                 {
-                    if (copyLength.HasValue && (counter + memory.Length) > copyLength)
+                    if (copyLength.HasValue && (totalBytesRead + memory.Length) > copyLength)
                     {
-                        var buffer = new byte[copyLength.Value - counter];
+                        var buffer = new byte[copyLength.Value - totalBytesRead];
                         memory = buffer.AsMemory();
                     }
 
                     int bytesRead = await source.ReadAsync(memory, cancellationToken);
-                    counter += bytesRead;
+                    totalBytesRead += bytesRead;
 
                     if (onStarted != null)
                     {
@@ -85,7 +85,7 @@ namespace Emby.Server.Implementations.IO
                         else
                         {
                             break;
-                        }   
+                        }
                     }
                     else
                     {
@@ -95,7 +95,7 @@ namespace Emby.Server.Implementations.IO
                     // Notify the writer how many bytes were read
                     writer.Advance(bytesRead);
 
-                    if (counter >= copyLength)
+                    if (totalBytesRead >= copyLength)
                         break;
                 }
                 catch (Exception ex)
@@ -110,6 +110,8 @@ namespace Emby.Server.Implementations.IO
                 if (result.IsCompleted)
                     break;
             }
+
+            return (int)totalBytesRead;
         }
     }
 
