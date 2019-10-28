@@ -13,29 +13,29 @@ namespace Emby.Server.Implementations.IO
     {
         private const int StreamCopyToBufferSize = 81920;
 
-        public Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
+        public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
         {
-            return CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, onStarted: onStarted);
+            await CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, onStarted: onStarted).ConfigureAwait(false);
         }
 
-        public Task CopyToAsync(Stream source, Stream destination, int bufferSize, int emptyReadLimit, CancellationToken cancellationToken)
+        public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, int emptyReadLimit, CancellationToken cancellationToken)
         {
-            return CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, emptyReadLimit: emptyReadLimit);
+            await CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, emptyReadLimit: emptyReadLimit).ConfigureAwait(false);
         }
 
-        public Task<int> CopyToAsync(Stream source, Stream destination, CancellationToken cancellationToken)
+        public async Task<int> CopyToAsync(Stream source, Stream destination, CancellationToken cancellationToken)
         {
-            return CopyToAsyncInternal(source, destination, cancellationToken);
+            return await CopyToAsyncInternal(source, destination, cancellationToken).ConfigureAwait(false);
         }
 
-        public Task CopyToAsync(Stream source, Stream destination, long copyLength, CancellationToken cancellationToken)
+        public async Task CopyToAsync(Stream source, Stream destination, long copyLength, CancellationToken cancellationToken)
         {
-            return CopyToAsyncInternal(source, destination, cancellationToken, copyLength: copyLength);
+            await CopyToAsyncInternal(source, destination, cancellationToken, copyLength: copyLength).ConfigureAwait(false);
         }
 
-        public Task CopyUntilCancelled(Stream source, Stream destination, int bufferSize, CancellationToken cancellationToken)
+        public async Task CopyUntilCancelled(Stream source, Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
-            return CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, copyUntilCancelled: true);
+            await CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, copyUntilCancelled: true).ConfigureAwait(false);
         }
 
         private async Task<int> CopyToAsyncInternal(
