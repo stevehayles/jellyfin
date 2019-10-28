@@ -1450,7 +1450,8 @@ namespace Emby.Server.Implementations
                 EncoderLocation = MediaEncoder.EncoderLocation,
                 SystemArchitecture = RuntimeInformation.OSArchitecture,
                 SystemUpdateLevel = SystemUpdateLevel,
-                PackageName = StartupOptions.PackageName
+                PackageName = StartupOptions.PackageName,
+                LiveTvFolderId = LiveTvManager.GetInternalLiveTvFolder(default).Id
             };
         }
 

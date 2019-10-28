@@ -143,6 +143,8 @@ namespace MediaBrowser.Model.System
 
         public Architecture SystemArchitecture { get; set; }
 
+        public Guid LiveTvFolderId { get; set; }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="SystemInfo" /> class.
         /// </summary>
