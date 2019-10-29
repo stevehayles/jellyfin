@@ -1,17 +1,16 @@
 using System;
 using System.Buffers;
 using System.IO;
-using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.IO;
-using Pipelines.Sockets.Unofficial;
 
 namespace Emby.Server.Implementations.IO
 {
-    public class PipeStreamHelper : IStreamHelper
+    public class StreamHelper : IStreamHelper
     {
         private const int StreamCopyToBufferSize = 81920;
+        private object _callbackLock = new object();
 
         public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
         {
@@ -38,39 +37,37 @@ namespace Emby.Server.Implementations.IO
             await CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, copyUntilCancelled: true).ConfigureAwait(false);
         }
 
-        private async Task<int> CopyToAsyncInternal(
+        private async ValueTask<int> CopyToAsyncInternal(
             Stream source,
             Stream destination,
             CancellationToken cancellationToken,
             int? buffersize = null,
-            int emptyReadLimit = -1,
+            int? emptyReadLimit = null,
             long? copyLength = null,
             Action onStarted = null,
             bool copyUntilCancelled = false)
         {
-            var totalBytesRead = 0L;
+            var totalBytesTransferred = 0;
             var eofCount = 0;
-            var writer = StreamConnection.GetWriter(destination);
 
-            while (!cancellationToken.IsCancellationRequested)
+            Action callback = () =>
             {
-                var memory = writer.GetMemory(buffersize ?? StreamCopyToBufferSize);
-                try
+                lock (_callbackLock)
                 {
-                    if (copyLength.HasValue && (totalBytesRead + memory.Length) > copyLength)
-                    {
-                        var buffer = new byte[copyLength.Value - totalBytesRead];
-                        memory = buffer.AsMemory();
-                    }
+                    Task.Run(onStarted ?? (() => { }));
+                    callback = null;
+                }
+            };
 
-                    int bytesRead = await source.ReadAsync(memory, cancellationToken);
-                    totalBytesRead += bytesRead;
+            buffersize = buffersize ?? StreamCopyToBufferSize;
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(buffersize.Value);
 
-                    if (onStarted != null)
-                    {
-                        onStarted();
-                        onStarted = null;
-                    }
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    int bytesRead = await source.ReadAsync(new Memory<byte>(buffer), cancellationToken).ConfigureAwait(false);
+                    int bytesToWrite = copyLength.HasValue ? (int)Math.Min(bytesRead, copyLength.Value) : bytesRead;
 
                     if (bytesRead == 0)
                     {
@@ -78,7 +75,7 @@ namespace Emby.Server.Implementations.IO
                         {
                             await Task.Delay(100, cancellationToken).ConfigureAwait(false);
                         }
-                        else if (emptyReadLimit > 0 && ++eofCount < emptyReadLimit)
+                        else if (emptyReadLimit.HasValue && ++eofCount < emptyReadLimit)
                         {
                             await Task.Delay(50, cancellationToken).ConfigureAwait(false);
                         }
@@ -90,51 +87,16 @@ namespace Emby.Server.Implementations.IO
                     else
                     {
                         eofCount = 0;
+                        await destination.WriteAsync(new ReadOnlyMemory<byte>(buffer, 0, bytesToWrite), cancellationToken).ConfigureAwait(false);
+                        totalBytesTransferred += bytesToWrite;
+
+                        callback?.Invoke();
                     }
 
-                    // Notify the writer how many bytes were read
-                    writer.Advance(bytesRead);
-
-                    if (totalBytesRead >= copyLength)
-                        break;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.ToString());
-                    break;
-                }
-
-                // Make the data available to the reader which runs the ReadAsync call
-                var result = await writer.FlushAsync();
-
-                if (result.IsCompleted)
-                    break;
-            }
-
-            return (int)totalBytesRead;
-        }
-    }
-
-    public class StreamHelper : IStreamHelper
-    {
-        private const int StreamCopyToBufferSize = 81920;
-
-        public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
-        {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
-            try
-            {
-                int read;
-                while ((read = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    await destination.WriteAsync(buffer, 0, read, cancellationToken).ConfigureAwait(false);
-
-                    if (onStarted != null)
+                    if (copyLength.HasValue)
                     {
-                        onStarted();
-                        onStarted = null;
+                        if ((copyLength -= bytesToWrite) <= 0)
+                            break;
                     }
                 }
             }
@@ -142,145 +104,8 @@ namespace Emby.Server.Implementations.IO
             {
                 ArrayPool<byte>.Shared.Return(buffer);
             }
-        }
 
-        public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, int emptyReadLimit, CancellationToken cancellationToken)
-        {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
-            try
-            {
-                if (emptyReadLimit <= 0)
-                {
-                    int read;
-                    while ((read = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        await destination.WriteAsync(buffer, 0, read, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    return;
-                }
-
-                var eofCount = 0;
-
-                while (eofCount < emptyReadLimit)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
-
-                    if (bytesRead == 0)
-                    {
-                        eofCount++;
-                        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        eofCount = 0;
-
-                        await destination.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
-                    }
-                }
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-
-        public async Task<int> CopyToAsync(Stream source, Stream destination, CancellationToken cancellationToken)
-        {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(StreamCopyToBufferSize);
-            try
-            {
-                int totalBytesRead = 0;
-
-                int bytesRead;
-                while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
-                {
-                    var bytesToWrite = bytesRead;
-
-                    if (bytesToWrite > 0)
-                    {
-                        await destination.WriteAsync(buffer, 0, Convert.ToInt32(bytesToWrite), cancellationToken).ConfigureAwait(false);
-
-                        totalBytesRead += bytesRead;
-                    }
-                }
-
-                return totalBytesRead;
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-
-        public async Task CopyToAsync(Stream source, Stream destination, long copyLength, CancellationToken cancellationToken)
-        {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(StreamCopyToBufferSize);
-            try
-            {
-                int bytesRead;
-
-                while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
-                {
-                    var bytesToWrite = Math.Min(bytesRead, copyLength);
-
-                    if (bytesToWrite > 0)
-                    {
-                        await destination.WriteAsync(buffer, 0, Convert.ToInt32(bytesToWrite), cancellationToken).ConfigureAwait(false);
-                    }
-
-                    copyLength -= bytesToWrite;
-
-                    if (copyLength <= 0)
-                    {
-                        break;
-                    }
-                }
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-
-        public async Task CopyUntilCancelled(Stream source, Stream target, int bufferSize, CancellationToken cancellationToken)
-        {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
-            try
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    var bytesRead = await CopyToAsyncInternal(source, target, buffer, cancellationToken).ConfigureAwait(false);
-
-                    if (bytesRead == 0)
-                    {
-                        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-                    }
-                }
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-
-        private static async Task<int> CopyToAsyncInternal(Stream source, Stream destination, byte[] buffer, CancellationToken cancellationToken)
-        {
-            int bytesRead;
-            int totalBytesRead = 0;
-
-            while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
-            {
-                await destination.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
-
-                totalBytesRead += bytesRead;
-            }
-
-            return totalBytesRead;
+            return totalBytesTransferred;
         }
     }
 }
