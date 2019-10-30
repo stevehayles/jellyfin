@@ -71,13 +71,10 @@ namespace Emby.Server.Implementations.IO
 
                     if (bytesRead == 0)
                     {
-                        if (copyUntilCancelled)
+                        if (copyUntilCancelled || ++eofCount < emptyReadLimit) // if emptyReadLimit is null this will evaulate to false
                         {
-                            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-                        }
-                        else if (emptyReadLimit.HasValue && ++eofCount < emptyReadLimit)
-                        {
-                            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+                            var delay = copyUntilCancelled ? 100 : 50; // matching original version but is it really different in each case ?
+                            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                         }
                         else
                         {
