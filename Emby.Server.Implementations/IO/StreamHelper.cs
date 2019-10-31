@@ -14,12 +14,12 @@ namespace Emby.Server.Implementations.IO
 
         public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
         {
-            await CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, onStarted: onStarted).ConfigureAwait(false);
+            await CopyToAsyncInternal(source, destination, cancellationToken, bufferSize, onStarted: onStarted).ConfigureAwait(false);
         }
 
         public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, int emptyReadLimit, CancellationToken cancellationToken)
         {
-            await CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, emptyReadLimit: emptyReadLimit).ConfigureAwait(false);
+            await CopyToAsyncInternal(source, destination, cancellationToken, bufferSize, emptyReadLimit).ConfigureAwait(false);
         }
 
         public async Task<int> CopyToAsync(Stream source, Stream destination, CancellationToken cancellationToken)
@@ -34,7 +34,7 @@ namespace Emby.Server.Implementations.IO
 
         public async Task CopyUntilCancelled(Stream source, Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
-            await CopyToAsyncInternal(source, destination, cancellationToken, buffersize: bufferSize, copyUntilCancelled: true).ConfigureAwait(false);
+            await CopyToAsyncInternal(source, destination, cancellationToken, bufferSize, copyUntilCancelled: true).ConfigureAwait(false);
         }
 
         private async ValueTask<int> CopyToAsyncInternal(
@@ -56,6 +56,7 @@ namespace Emby.Server.Implementations.IO
                 {
                     Task.Run(onStarted ?? (() => { }));
                     callback = null;
+                    onStarted = null;
                 }
             };
 
@@ -90,11 +91,8 @@ namespace Emby.Server.Implementations.IO
                         callback?.Invoke();
                     }
 
-                    if (copyLength.HasValue)
-                    {
-                        if ((copyLength -= bytesToWrite) <= 0)
-                            break;
-                    }
+                    if (copyLength.HasValue && (copyLength -= bytesToWrite) <= 0)
+                        break;
                 }
             }
             finally
