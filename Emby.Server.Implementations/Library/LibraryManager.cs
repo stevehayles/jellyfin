@@ -2110,6 +2110,7 @@ namespace Emby.Server.Implementations.Library
             var id = GetNewItemId(path + "_namedview_" + name, typeof(UserView));
 
             var item = GetItemById(id) as UserView;
+            item.ViewType = item.ViewType ?? viewType;
 
             var refresh = false;
 
