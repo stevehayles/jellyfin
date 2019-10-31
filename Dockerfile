@@ -29,7 +29,7 @@ COPY --from=web-builder /dist /jellyfin/jellyfin-web
 #   mesa-va-drivers: needed for VAAPI
 RUN apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests -y \
-   libfontconfig1 libgomp1 libva-drm2 mesa-va-drivers openssl i965-va-driver \
+   libfontconfig1 libgomp1 libva-drm2 mesa-va-drivers openssl i965-va-driver ca-certificates \
  && apt-get clean autoclean \
  && apt-get autoremove \
  && rm -rf /var/lib/apt/lists/* \
@@ -39,6 +39,9 @@ RUN apt-get update \
  && ln -s /opt/ffmpeg/bin/ffprobe /usr/local/bin
 
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+
+COPY certificates/*.cer /usr/local/share/ca-certificates/
+RUN chmod 644 /usr/local/share/ca-certificates/*.cer && update-ca-certificates
 
 EXPOSE 8096
 VOLUME /cache /config /media
