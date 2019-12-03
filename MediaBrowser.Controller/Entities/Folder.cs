@@ -216,7 +216,7 @@ namespace MediaBrowser.Controller.Entities
 
         public Task ValidateChildren(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            return ValidateChildren(progress, cancellationToken, new MetadataRefreshOptions(new DirectoryService(Logger, FileSystem)));
+            return ValidateChildren(progress, cancellationToken, new MetadataRefreshOptions(new DirectoryService(FileSystem)));
         }
 
         /// <summary>
@@ -1152,6 +1152,11 @@ namespace MediaBrowser.Controller.Entities
 
         public List<BaseItem> GetChildren(User user, bool includeLinkedChildren)
         {
+            if (user == null)
+            {
+                throw new ArgumentNullException(nameof(user));
+            }
+
             return GetChildren(user, includeLinkedChildren, null);
         }
 
@@ -1163,7 +1168,10 @@ namespace MediaBrowser.Controller.Entities
             }
 
             //the true root should return our users root folder children
-            if (IsPhysicalRoot) return LibraryManager.GetUserRootFolder().GetChildren(user, includeLinkedChildren);
+            if (IsPhysicalRoot)
+            {
+                return LibraryManager.GetUserRootFolder().GetChildren(user, includeLinkedChildren);
+            }
 
             var result = new Dictionary<Guid, BaseItem>();
 

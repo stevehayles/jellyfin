@@ -6,12 +6,12 @@ using MediaBrowser.Controller;
 namespace Emby.Server.Implementations
 {
     /// <summary>
-    /// Extends BaseApplicationPaths to add paths that are only applicable on the server
+    /// Extends BaseApplicationPaths to add paths that are only applicable on the server.
     /// </summary>
     public class ServerApplicationPaths : BaseApplicationPaths, IServerApplicationPaths
     {
-        private string _defaultTranscodingTempPath;
-        private string _transcodingTempPath;
+        private string _defaultTranscodePath;
+        private string _transcodePath;
         private string _internalMetadataPath;
 
         /// <summary>
@@ -106,40 +106,6 @@ namespace Emby.Server.Implementations
         /// </summary>
         /// <value>The user configuration directory path.</value>
         public string UserConfigurationDirectoryPath => Path.Combine(ConfigurationDirectoryPath, "users");
-
-        public string DefaultTranscodingTempPath => _defaultTranscodingTempPath ?? (_defaultTranscodingTempPath = Path.Combine(ProgramDataPath, "transcoding-temp"));
-
-        public string TranscodingTempPath
-        {
-            get => _transcodingTempPath ?? (_transcodingTempPath = DefaultTranscodingTempPath);
-            set => _transcodingTempPath = value;
-        }
-
-        public string GetTranscodingTempPath()
-        {
-            var path = TranscodingTempPath;
-
-            if (!string.Equals(path, DefaultTranscodingTempPath, StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    Directory.CreateDirectory(path);
-
-                    var testPath = Path.Combine(path, Guid.NewGuid().ToString());
-                    Directory.CreateDirectory(testPath);
-                    Directory.Delete(testPath);
-
-                    return path;
-                }
-                catch
-                {
-                }
-            }
-
-            path = DefaultTranscodingTempPath;
-            Directory.CreateDirectory(path);
-            return path;
-        }
 
         public string InternalMetadataPath
         {

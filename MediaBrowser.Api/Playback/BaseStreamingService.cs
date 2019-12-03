@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Devices;
@@ -141,7 +142,7 @@ namespace MediaBrowser.Api.Playback
 
             var filename = data.GetMD5().ToString("N", CultureInfo.InvariantCulture);
             var ext = outputFileExtension.ToLowerInvariant();
-            var folder = ServerConfigurationManager.ApplicationPaths.TranscodingTempPath;
+            var folder = ServerConfigurationManager.GetTranscodePath();
 
             if (EnableOutputInSubFolder)
             {
@@ -215,7 +216,7 @@ namespace MediaBrowser.Api.Playback
                 }
             }
 
-            var encodingOptions = ApiEntryPoint.Instance.GetEncodingOptions();
+            var encodingOptions = ServerConfigurationManager.GetEncodingOptions();
 
             var process = new Process()
             {
@@ -320,7 +321,6 @@ namespace MediaBrowser.Api.Playback
                 StartThrottler(state, transcodingJob);
             }
             Logger.LogDebug("StartFfMpeg() finished successfully");
-
 
             return transcodingJob;
         }
@@ -589,7 +589,7 @@ namespace MediaBrowser.Api.Playback
 
         /// <summary>
         /// Parses query parameters as StreamOptions
-        /// <summary>
+        /// </summary>
         /// <param name="request">The stream request.</param>
         private void ParseStreamOptions(StreamRequest request)
         {
@@ -846,7 +846,7 @@ namespace MediaBrowser.Api.Playback
                 ? GetOutputFileExtension(state)
                 : ('.' + state.OutputContainer);
 
-            var encodingOptions = ApiEntryPoint.Instance.GetEncodingOptions();
+            var encodingOptions = ServerConfigurationManager.GetEncodingOptions();
 
             state.OutputFilePath = GetOutputFilePath(state, encodingOptions, ext);
 
