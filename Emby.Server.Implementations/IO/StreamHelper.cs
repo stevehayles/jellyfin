@@ -10,7 +10,7 @@ namespace Emby.Server.Implementations.IO
     public class StreamHelper : IStreamHelper
     {
         private const int StreamCopyToBufferSize = 81920;
-        private object _callbackLock = new object();
+        private readonly object _callbackLock = new object();
 
         public async Task CopyToAsync(Stream source, Stream destination, int bufferSize, Action onStarted, CancellationToken cancellationToken)
         {
