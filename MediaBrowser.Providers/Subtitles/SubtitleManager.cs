@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,28 +21,28 @@ using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Logging;
-using static MediaBrowser.Model.IO.StreamDefaults;
+using static MediaBrowser.Model.IO.IODefaults;
 
 namespace MediaBrowser.Providers.Subtitles
 {
     public class SubtitleManager : ISubtitleManager
     {
-        private ISubtitleProvider[] _subtitleProviders;
-        private readonly ILogger _logger;
+        private readonly ILogger<SubtitleManager> _logger;
         private readonly IFileSystem _fileSystem;
         private readonly ILibraryMonitor _monitor;
         private readonly IMediaSourceManager _mediaSourceManager;
+        private readonly ILocalizationManager _localization;
 
-        private ILocalizationManager _localization;
+        private ISubtitleProvider[] _subtitleProviders;
 
         public SubtitleManager(
-            ILoggerFactory loggerFactory,
+            ILogger<SubtitleManager> logger,
             IFileSystem fileSystem,
             ILibraryMonitor monitor,
             IMediaSourceManager mediaSourceManager,
             ILocalizationManager localizationManager)
         {
-            _logger = loggerFactory.CreateLogger(nameof(SubtitleManager));
+            _logger = logger;
             _fileSystem = fileSystem;
             _monitor = monitor;
             _mediaSourceManager = mediaSourceManager;
@@ -104,6 +106,7 @@ namespace MediaBrowser.Providers.Subtitles
                         _logger.LogError(ex, "Error downloading subtitles from {Provider}", provider.Name);
                     }
                 }
+
                 return Array.Empty<RemoteSubtitleInfo>();
             }
 
@@ -144,40 +147,14 @@ namespace MediaBrowser.Providers.Subtitles
             string subtitleId,
             CancellationToken cancellationToken)
         {
-            var parts = subtitleId.Split(new[] { '_' }, 2);
-            var provider = GetProvider(parts.First());
-
-            var saveInMediaFolder = libraryOptions.SaveSubtitlesWithMedia;
+            var parts = subtitleId.Split('_', 2);
+            var provider = GetProvider(parts[0]);
 
             try
             {
                 var response = await GetRemoteSubtitles(subtitleId, cancellationToken).ConfigureAwait(false);
 
-                using (var stream = response.Stream)
-                using (var memoryStream = new MemoryStream())
-                {
-                    await stream.CopyToAsync(memoryStream).ConfigureAwait(false);
-                    memoryStream.Position = 0;
-
-                    var savePaths = new List<string>();
-                    var saveFileName = Path.GetFileNameWithoutExtension(video.Path) + "." + response.Language.ToLowerInvariant();
-
-                    if (response.IsForced)
-                    {
-                        saveFileName += ".forced";
-                    }
-
-                    saveFileName += "." + response.Format.ToLowerInvariant();
-
-                    if (saveInMediaFolder)
-                    {
-                        savePaths.Add(Path.Combine(video.ContainingFolderPath, saveFileName));
-                    }
-
-                    savePaths.Add(Path.Combine(video.GetInternalMetadataPath(), saveFileName));
-
-                    await TrySaveToFiles(memoryStream, savePaths).ConfigureAwait(false);
-                }
+                await TrySaveSubtitle(video, libraryOptions, response).ConfigureAwait(false);
             }
             catch (RateLimitExceededException)
             {
@@ -196,6 +173,47 @@ namespace MediaBrowser.Providers.Subtitles
             }
         }
 
+        /// <inheritdoc />
+        public Task UploadSubtitle(Video video, SubtitleResponse response)
+        {
+            var libraryOptions = BaseItem.LibraryManager.GetLibraryOptions(video);
+            return TrySaveSubtitle(video, libraryOptions, response);
+        }
+
+        private async Task TrySaveSubtitle(
+            Video video,
+            LibraryOptions libraryOptions,
+            SubtitleResponse response)
+        {
+            var saveInMediaFolder = libraryOptions.SaveSubtitlesWithMedia;
+
+            using (var stream = response.Stream)
+            using (var memoryStream = new MemoryStream())
+            {
+                await stream.CopyToAsync(memoryStream).ConfigureAwait(false);
+                memoryStream.Position = 0;
+
+                var savePaths = new List<string>();
+                var saveFileName = Path.GetFileNameWithoutExtension(video.Path) + "." + response.Language.ToLowerInvariant();
+
+                if (response.IsForced)
+                {
+                    saveFileName += ".forced";
+                }
+
+                saveFileName += "." + response.Format.ToLowerInvariant();
+
+                if (saveInMediaFolder)
+                {
+                    savePaths.Add(Path.Combine(video.ContainingFolderPath, saveFileName));
+                }
+
+                savePaths.Add(Path.Combine(video.GetInternalMetadataPath(), saveFileName));
+
+                await TrySaveToFiles(memoryStream, savePaths).ConfigureAwait(false);
+            }
+        }
+
         private async Task TrySaveToFiles(Stream stream, List<string> savePaths)
         {
             Exception exceptionToThrow = null;
@@ -210,7 +228,7 @@ namespace MediaBrowser.Providers.Subtitles
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(savePath));
 
-                    using (var fs = new FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.Read, DefaultFileStreamBufferSize, true))
+                    using (var fs = new FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.Read, FileStreamBufferSize, true))
                     {
                         await stream.CopyToAsync(fs).ConfigureAwait(false);
                     }
@@ -300,7 +318,7 @@ namespace MediaBrowser.Providers.Subtitles
 
         private ISubtitleProvider GetProvider(string id)
         {
-            return _subtitleProviders.First(i => string.Equals(id, GetProviderId(i.Name)));
+            return _subtitleProviders.First(i => string.Equals(id, GetProviderId(i.Name), StringComparison.Ordinal));
         }
 
         /// <inheritdoc />
@@ -311,8 +329,7 @@ namespace MediaBrowser.Providers.Subtitles
                 Index = index,
                 ItemId = item.Id,
                 Type = MediaStreamType.Subtitle
-
-            }).First();
+            })[0];
 
             var path = stream.Path;
             _monitor.ReportFileSystemChangeBeginning(path);
@@ -332,10 +349,10 @@ namespace MediaBrowser.Providers.Subtitles
         /// <inheritdoc />
         public Task<SubtitleResponse> GetRemoteSubtitles(string id, CancellationToken cancellationToken)
         {
-            var parts = id.Split(new[] { '_' }, 2);
+            var parts = id.Split('_', 2);
 
             var provider = GetProvider(parts[0]);
-            id = parts.Last();
+            id = parts[^1];
 
             return provider.GetSubtitles(id, cancellationToken);
         }
@@ -365,9 +382,7 @@ namespace MediaBrowser.Providers.Subtitles
                 {
                     Name = i.Name,
                     Id = GetProviderId(i.Name)
-
                 }).ToArray();
         }
-
     }
 }

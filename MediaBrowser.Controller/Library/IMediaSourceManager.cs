@@ -1,8 +1,11 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
@@ -25,12 +28,14 @@ namespace MediaBrowser.Controller.Library
         /// <param name="itemId">The item identifier.</param>
         /// <returns>IEnumerable&lt;MediaStream&gt;.</returns>
         List<MediaStream> GetMediaStreams(Guid itemId);
+
         /// <summary>
         /// Gets the media streams.
         /// </summary>
         /// <param name="mediaSourceId">The media source identifier.</param>
         /// <returns>IEnumerable&lt;MediaStream&gt;.</returns>
         List<MediaStream> GetMediaStreams(string mediaSourceId);
+
         /// <summary>
         /// Gets the media streams.
         /// </summary>
@@ -39,9 +44,23 @@ namespace MediaBrowser.Controller.Library
         List<MediaStream> GetMediaStreams(MediaStreamQuery query);
 
         /// <summary>
+        /// Gets the media attachments.
+        /// </summary>
+        /// <param name="itemId">The item identifier.</param>
+        /// <returns>IEnumerable&lt;MediaAttachment&gt;.</returns>
+        List<MediaAttachment> GetMediaAttachments(Guid itemId);
+
+        /// <summary>
+        /// Gets the media attachments.
+        /// </summary>
+        /// <param name="query">The query.</param>
+        /// <returns>IEnumerable&lt;MediaAttachment&gt;.</returns>
+        List<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query);
+
+        /// <summary>
         /// Gets the playack media sources.
         /// </summary>
-        Task<List<MediaSourceInfo>> GetPlayackMediaSources(BaseItem item, User user, bool allowMediaProbe, bool enablePathSubstitution, CancellationToken cancellationToken);
+        Task<List<MediaSourceInfo>> GetPlaybackMediaSources(BaseItem item, User user, bool allowMediaProbe, bool enablePathSubstitution, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the static media sources.
@@ -96,5 +115,7 @@ namespace MediaBrowser.Controller.Library
     public interface IDirectStreamProvider
     {
         Task CopyToAsync(Stream stream, CancellationToken cancellationToken);
+
+        string GetFilePath();
     }
 }

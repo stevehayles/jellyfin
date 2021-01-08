@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -12,7 +14,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Extensions;
 using MediaBrowser.XbmcMetadata.Configuration;
 using MediaBrowser.XbmcMetadata.Savers;
 using Microsoft.Extensions.Logging;
@@ -28,11 +29,15 @@ namespace MediaBrowser.XbmcMetadata.Parsers
         /// <summary>
         /// Initializes a new instance of the <see cref="BaseNfoParser{T}" /> class.
         /// </summary>
+        /// <param name="logger">The logger.</param>
+        /// <param name="config">the configuration manager.</param>
+        /// <param name="providerManager">The provider manager.</param>
         public BaseNfoParser(ILogger logger, IConfigurationManager config, IProviderManager providerManager)
         {
             Logger = logger;
             _config = config;
             ProviderManager = providerManager;
+            _validProviderIds = new Dictionary<string, string>();
         }
 
         protected CultureInfo UsCulture { get; } = new CultureInfo("en-US");
@@ -49,13 +54,13 @@ namespace MediaBrowser.XbmcMetadata.Parsers
         protected virtual string MovieDbParserSearchString => "themoviedb.org/movie/";
 
         /// <summary>
-        /// Fetches metadata for an item from one xml file
+        /// Fetches metadata for an item from one xml file.
         /// </summary>
         /// <param name="item">The item.</param>
         /// <param name="metadataFile">The metadata file.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        /// <exception cref="ArgumentNullException">
-        /// </exception>
+        /// <exception cref="ArgumentNullException"><c>item</c> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentException"><c>metadataFile</c> is <c>null</c> or empty.</exception>
         public void Fetch(MetadataResult<T> item, string metadataFile, CancellationToken cancellationToken)
         {
             if (item == null)
@@ -68,7 +73,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                 throw new ArgumentException("The metadata file was empty or null.", nameof(metadataFile));
             }
 
-            _validProviderIds = _validProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _validProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             var idInfos = ProviderManager.GetExternalIdInfos(item.Item);
 
@@ -81,7 +86,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                 }
             }
 
-            //Additional Mappings
+            // Additional Mappings
             _validProviderIds.Add("collectionnumber", "TmdbCollection");
             _validProviderIds.Add("tmdbcolid", "TmdbCollection");
             _validProviderIds.Add("imdb_id", "Imdb");
@@ -124,6 +129,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         }
                     }
                 }
+
                 return;
             }
 
@@ -197,18 +203,17 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                 }
                 catch (XmlException)
                 {
-
                 }
             }
         }
 
         protected void ParseProviderLinks(T item, string xml)
         {
-            //Look for a match for the Regex pattern "tt" followed by 7 digits
-            var m = Regex.Match(xml, @"tt([0-9]{7})", RegexOptions.IgnoreCase);
+            // Look for a match for the Regex pattern "tt" followed by 7 or 8 digits
+            var m = Regex.Match(xml, "tt([0-9]{7,8})", RegexOptions.IgnoreCase);
             if (m.Success)
             {
-                item.SetProviderId(MetadataProviders.Imdb, m.Value);
+                item.SetProviderId(MetadataProvider.Imdb, m.Value);
             }
 
             // Support Tmdb
@@ -218,10 +223,18 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
             if (index != -1)
             {
-                var tmdbId = xml.Substring(index + srch.Length).TrimEnd('/').Split('-')[0];
-                if (!string.IsNullOrWhiteSpace(tmdbId) && int.TryParse(tmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+                var tmdbId = xml.AsSpan().Slice(index + srch.Length).TrimEnd('/');
+                index = tmdbId.IndexOf('-');
+                if (index != -1)
                 {
-                    item.SetProviderId(MetadataProviders.Tmdb, value.ToString(UsCulture));
+                    tmdbId = tmdbId.Slice(0, index);
+                }
+
+                if (!tmdbId.IsEmpty
+                    && !tmdbId.IsWhiteSpace()
+                    && int.TryParse(tmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+                {
+                    item.SetProviderId(MetadataProvider.Tmdb, value.ToString(UsCulture));
                 }
             }
 
@@ -233,10 +246,12 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
                 if (index != -1)
                 {
-                    var tvdbId = xml.Substring(index + srch.Length).TrimEnd('/');
-                    if (!string.IsNullOrWhiteSpace(tvdbId) && int.TryParse(tvdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+                    var tvdbId = xml.AsSpan().Slice(index + srch.Length).TrimEnd('/');
+                    if (!tvdbId.IsEmpty
+                        && !tvdbId.IsWhiteSpace()
+                        && int.TryParse(tvdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
                     {
-                        item.SetProviderId(MetadataProviders.Tvdb, value.ToString(UsCulture));
+                        item.SetProviderId(MetadataProvider.Tvdb, value.ToString(UsCulture));
                     }
                 }
             }
@@ -268,6 +283,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 Logger.LogWarning("Invalid Added value found: " + val);
                             }
                         }
+
                         break;
                     }
 
@@ -279,6 +295,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.OriginalTitle = val;
                         }
+
                         break;
                     }
 
@@ -310,6 +327,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.ForcedSortName = val;
                         }
+
                         break;
                     }
 
@@ -353,14 +371,13 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.LockedFields = val.Split('|').Select(i =>
                             {
-                                if (Enum.TryParse(i, true, out MetadataFields field))
+                                if (Enum.TryParse(i, true, out MetadataField field))
                                 {
-                                    return (MetadataFields?)field;
+                                    return (MetadataField?)field;
                                 }
 
                                 return null;
-
-                            }).Where(i => i.HasValue).Select(i => i.Value).ToArray();
+                            }).OfType<MetadataField>().ToArray();
                         }
 
                         break;
@@ -374,6 +391,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.Tagline = val;
                         }
+
                         break;
                     }
 
@@ -388,6 +406,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 .Where(i => !string.IsNullOrWhiteSpace(i))
                                 .ToArray();
                         }
+
                         break;
                     }
 
@@ -399,6 +418,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.OfficialRating = rating;
                         }
+
                         break;
                     }
 
@@ -410,6 +430,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.CustomRating = val;
                         }
+
                         break;
                     }
 
@@ -424,6 +445,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 item.RunTimeTicks = TimeSpan.FromMinutes(runtime).Ticks;
                             }
                         }
+
                         break;
                     }
 
@@ -431,11 +453,12 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                     {
                         var val = reader.ReadElementContentAsString();
 
-                        var hasAspectRatio = item as IHasAspectRatio;
-                        if (!string.IsNullOrWhiteSpace(val) && hasAspectRatio != null)
+                        if (!string.IsNullOrWhiteSpace(val)
+                            && item is IHasAspectRatio hasAspectRatio)
                         {
                             hasAspectRatio.AspectRatio = val;
                         }
+
                         break;
                     }
 
@@ -447,6 +470,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.IsLocked = string.Equals("true", val, StringComparison.OrdinalIgnoreCase);
                         }
+
                         break;
                     }
 
@@ -456,16 +480,9 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
                         if (!string.IsNullOrWhiteSpace(val))
                         {
-                            //var parts = val.Split('/')
-                            //    .Select(i => i.Trim())
-                            //    .Where(i => !string.IsNullOrWhiteSpace(i));
-
-                            //foreach (var p in parts)
-                            //{
-                            //    item.AddStudio(p);
-                            //}
                             item.AddStudio(val);
                         }
+
                         break;
                     }
 
@@ -478,10 +495,13 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                             {
                                 continue;
                             }
+
                             itemResult.AddPerson(p);
                         }
+
                         break;
                     }
+
                 case "credits":
                     {
                         var val = reader.ReadElementContentAsString();
@@ -497,9 +517,11 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 {
                                     continue;
                                 }
+
                                 itemResult.AddPerson(p);
                             }
                         }
+
                         break;
                     }
 
@@ -512,8 +534,10 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                             {
                                 continue;
                             }
+
                             itemResult.AddPerson(p);
                         }
+
                         break;
                     }
 
@@ -535,6 +559,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             reader.Read();
                         }
+
                         break;
                     }
 
@@ -548,6 +573,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
                             item.AddTrailerUrl(val);
                         }
+
                         break;
                     }
 
@@ -563,6 +589,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 hasDisplayOrder.DisplayOrder = val;
                             }
                         }
+
                         break;
                     }
 
@@ -583,7 +610,6 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
                 case "rating":
                     {
-
                         var rating = reader.ReadElementContentAsString();
 
                         if (!string.IsNullOrWhiteSpace(rating))
@@ -594,6 +620,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 item.CommunityRating = val;
                             }
                         }
+
                         break;
                     }
 
@@ -650,6 +677,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 item.AddGenre(p);
                             }
                         }
+
                         break;
                     }
 
@@ -661,6 +689,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             item.AddTag(val);
                         }
+
                         break;
                     }
 
@@ -677,15 +706,16 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             reader.Read();
                         }
+
                         break;
                     }
 
                 default:
                     string readerName = reader.Name;
-                    if (_validProviderIds.TryGetValue(readerName, out string providerIdValue))
+                    if (_validProviderIds.TryGetValue(readerName, out string? providerIdValue))
                     {
                         var id = reader.ReadElementContentAsString();
-                        if (!string.IsNullOrWhiteSpace(id))
+                        if (!string.IsNullOrWhiteSpace(providerIdValue) && !string.IsNullOrWhiteSpace(id))
                         {
                             item.SetProviderId(providerIdValue, id);
                         }
@@ -694,6 +724,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                     {
                         reader.Skip();
                     }
+
                     break;
             }
         }
@@ -717,10 +748,12 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                     reader.Read();
                                     continue;
                                 }
+
                                 using (var subtree = reader.ReadSubtree())
                                 {
                                     FetchFromStreamDetailsNode(subtree, item);
                                 }
+
                                 break;
                             }
 
@@ -755,10 +788,12 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                     reader.Read();
                                     continue;
                                 }
+
                                 using (var subtree = reader.ReadSubtree())
                                 {
                                     FetchFromVideoNode(subtree, item);
                                 }
+
                                 break;
                             }
 
@@ -815,6 +850,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                         video.Video3DFormat = Video3DFormat.MVC;
                                     }
                                 }
+
                                 break;
                             }
 
@@ -864,8 +900,10 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 {
                                     role = val;
                                 }
+
                                 break;
                             }
+
                         case "sortorder":
                             {
                                 var val = reader.ReadElementContentAsString();
@@ -877,6 +915,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                         sortOrder = intVal;
                                     }
                                 }
+
                                 break;
                             }
 
@@ -910,7 +949,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
             };
 
         /// <summary>
-        /// Used to split names of comma or pipe delimeted genres and people
+        /// Used to split names of comma or pipe delimeted genres and people.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>IEnumerable{System.String}.</returns>
@@ -920,7 +959,9 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
             // Only split by comma if there is no pipe in the string
             // We have to be careful to not split names like Matthew, Jr.
-            var separator = value.IndexOf('|') == -1 && value.IndexOf(';') == -1 ? new[] { ',' } : new[] { '|', ';' };
+            var separator = value.IndexOf('|', StringComparison.Ordinal) == -1 && value.IndexOf(';', StringComparison.Ordinal) == -1
+                ? new[] { ',' }
+                : new[] { '|', ';' };
 
             value = value.Trim().Trim(separator);
 

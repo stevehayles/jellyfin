@@ -40,12 +40,35 @@ namespace Rssdp.Infrastructure
         public SsdpDevicePublisher(ISsdpCommunicationsServer communicationsServer, INetworkManager networkManager,
             string osName, string osVersion, bool sendOnlyMatchedHost)
         {
-            if (communicationsServer == null) throw new ArgumentNullException(nameof(communicationsServer));
-            if (networkManager == null) throw new ArgumentNullException(nameof(networkManager));
-            if (osName == null) throw new ArgumentNullException(nameof(osName));
-            if (osName.Length == 0) throw new ArgumentException("osName cannot be an empty string.", nameof(osName));
-            if (osVersion == null) throw new ArgumentNullException(nameof(osVersion));
-            if (osVersion.Length == 0) throw new ArgumentException("osVersion cannot be an empty string.", nameof(osName));
+            if (communicationsServer == null)
+            {
+                throw new ArgumentNullException(nameof(communicationsServer));
+            }
+
+            if (networkManager == null)
+            {
+                throw new ArgumentNullException(nameof(networkManager));
+            }
+
+            if (osName == null)
+            {
+                throw new ArgumentNullException(nameof(osName));
+            }
+
+            if (osName.Length == 0)
+            {
+                throw new ArgumentException("osName cannot be an empty string.", nameof(osName));
+            }
+
+            if (osVersion == null)
+            {
+                throw new ArgumentNullException(nameof(osVersion));
+            }
+
+            if (osVersion.Length == 0)
+            {
+                throw new ArgumentException("osVersion cannot be an empty string.", nameof(osName));
+            }
 
             _SupportPnpRootDevice = true;
             _Devices = new List<SsdpRootDevice>();
@@ -79,10 +102,13 @@ namespace Rssdp.Infrastructure
         /// <param name="device">The <see cref="SsdpDevice"/> instance to add.</param>
         /// <exception cref="ArgumentNullException">Thrown if the <paramref name="device"/> argument is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown if the <paramref name="device"/> contains property values that are not acceptable to the UPnP 1.0 specification.</exception>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1804:RemoveUnusedLocals", MessageId = "t", Justification = "Capture task to local variable supresses compiler warning, but task is not really needed.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1804:RemoveUnusedLocals", MessageId = "t", Justification = "Capture task to local variable suppresses compiler warning, but task is not really needed.")]
         public void AddDevice(SsdpRootDevice device)
         {
-            if (device == null) throw new ArgumentNullException(nameof(device));
+            if (device == null)
+            {
+                throw new ArgumentNullException(nameof(device));
+            }
 
             ThrowIfDisposed();
 
@@ -115,7 +141,10 @@ namespace Rssdp.Infrastructure
         /// <exception cref="ArgumentNullException">Thrown if the <paramref name="device"/> argument is null.</exception>
         public async Task RemoveDevice(SsdpRootDevice device)
         {
-            if (device == null) throw new ArgumentNullException(nameof(device));
+            if (device == null)
+            {
+                throw new ArgumentNullException(nameof(device));
+            }
 
             bool wasRemoved = false;
             lock (_Devices)
@@ -151,11 +180,12 @@ namespace Rssdp.Infrastructure
         /// </summary>
         /// <remarks>
         /// <para>Enabling this option will cause devices to show up in Microsoft Windows Explorer's network screens (if discovery is enabled etc.). Windows Explorer appears to search only for pnp:rootdeivce and not upnp:rootdevice.</para>
-        /// <para>If false, the system will only use upnp:rootdevice for notifiation broadcasts and and search responses, which is correct according to the UPnP/SSDP spec.</para>
+        /// <para>If false, the system will only use upnp:rootdevice for notification broadcasts and and search responses, which is correct according to the UPnP/SSDP spec.</para>
         /// </remarks>
         public bool SupportPnpRootDevice
         {
             get { return _SupportPnpRootDevice; }
+
             set
             {
                 _SupportPnpRootDevice = value;
@@ -185,7 +215,9 @@ namespace Rssdp.Infrastructure
                 if (commsServer != null)
                 {
                     if (!commsServer.IsShared)
+                    {
                         commsServer.Dispose();
+                    }
                 }
 
                 _RecentSearchRequests = null;
@@ -205,66 +237,77 @@ namespace Rssdp.Infrastructure
                 return;
             }
 
-            //WriteTrace(String.Format("Search Request Received From {0}, Target = {1}", remoteEndPoint.ToString(), searchTarget));
+            // WriteTrace(String.Format("Search Request Received From {0}, Target = {1}", remoteEndPoint.ToString(), searchTarget));
 
             if (IsDuplicateSearchRequest(searchTarget, remoteEndPoint))
             {
-                //WriteTrace("Search Request is Duplicate, ignoring.");
+                // WriteTrace("Search Request is Duplicate, ignoring.");
                 return;
             }
 
-            //Wait on random interval up to MX, as per SSDP spec.
-            //Also, as per UPnP 1.1/SSDP spec ignore missing/bank MX header. If over 120, assume random value between 0 and 120.
-            //Using 16 as minimum as that's often the minimum system clock frequency anyway.
+            // Wait on random interval up to MX, as per SSDP spec.
+            // Also, as per UPnP 1.1/SSDP spec ignore missing/bank MX header. If over 120, assume random value between 0 and 120.
+            // Using 16 as minimum as that's often the minimum system clock frequency anyway.
             int maxWaitInterval = 0;
             if (String.IsNullOrEmpty(mx))
             {
-                //Windows Explorer is poorly behaved and doesn't supply an MX header value.
-                //if (this.SupportPnpRootDevice)
+                // Windows Explorer is poorly behaved and doesn't supply an MX header value.
+                // if (this.SupportPnpRootDevice)
                 mx = "1";
-                //else
-                //return;
+                // else
+                // return;
             }
 
-            if (!Int32.TryParse(mx, out maxWaitInterval) || maxWaitInterval <= 0) return;
+            if (!Int32.TryParse(mx, out maxWaitInterval) || maxWaitInterval <= 0)
+            {
+                return;
+            }
 
             if (maxWaitInterval > 120)
+            {
                 maxWaitInterval = _Random.Next(0, 120);
+            }
 
-            //Do not block synchronously as that may tie up a threadpool thread for several seconds.
+            // Do not block synchronously as that may tie up a threadpool thread for several seconds.
             Task.Delay(_Random.Next(16, (maxWaitInterval * 1000))).ContinueWith((parentTask) =>
             {
-                //Copying devices to local array here to avoid threading issues/enumerator exceptions.
+                // Copying devices to local array here to avoid threading issues/enumerator exceptions.
                 IEnumerable<SsdpDevice> devices = null;
                 lock (_Devices)
                 {
                     if (String.Compare(SsdpConstants.SsdpDiscoverAllSTHeader, searchTarget, StringComparison.OrdinalIgnoreCase) == 0)
+                    {
                         devices = GetAllDevicesAsFlatEnumerable().ToArray();
+                    }
                     else if (String.Compare(SsdpConstants.UpnpDeviceTypeRootDevice, searchTarget, StringComparison.OrdinalIgnoreCase) == 0 || (this.SupportPnpRootDevice && String.Compare(SsdpConstants.PnpDeviceTypeRootDevice, searchTarget, StringComparison.OrdinalIgnoreCase) == 0))
+                    {
                         devices = _Devices.ToArray();
+                    }
                     else if (searchTarget.Trim().StartsWith("uuid:", StringComparison.OrdinalIgnoreCase))
+                    {
                         devices = (from device in GetAllDevicesAsFlatEnumerable() where String.Compare(device.Uuid, searchTarget.Substring(5), StringComparison.OrdinalIgnoreCase) == 0 select device).ToArray();
+                    }
                     else if (searchTarget.StartsWith("urn:", StringComparison.OrdinalIgnoreCase))
+                    {
                         devices = (from device in GetAllDevicesAsFlatEnumerable() where String.Compare(device.FullDeviceType, searchTarget, StringComparison.OrdinalIgnoreCase) == 0 select device).ToArray();
+                    }
                 }
 
                 if (devices != null)
                 {
                     var deviceList = devices.ToList();
-                    //WriteTrace(String.Format("Sending {0} search responses", deviceList.Count));
+                    // WriteTrace(String.Format("Sending {0} search responses", deviceList.Count));
 
                     foreach (var device in deviceList)
                     {
-                        if (!_sendOnlyMatchedHost ||
-                            _networkManager.IsInSameSubnet(device.ToRootDevice().Address, remoteEndPoint.Address, device.ToRootDevice().SubnetMask))
+                        var root = device.ToRootDevice();
+                        var source = new IPNetAddress(root.Address, root.PrefixLength);
+                        var destination = new IPNetAddress(remoteEndPoint.Address, root.PrefixLength);
+                        if (!_sendOnlyMatchedHost || source.NetworkAddress.Equals(destination.NetworkAddress))
                         {
                             SendDeviceSearchResponses(device, remoteEndPoint, receivedOnlocalIpAddress, cancellationToken);
                         }
                     }
-                }
-                else
-                {
-                    //WriteTrace(String.Format("Sending 0 search responses."));
                 }
             });
         }
@@ -285,7 +328,9 @@ namespace Rssdp.Infrastructure
             {
                 SendSearchResponse(SsdpConstants.UpnpDeviceTypeRootDevice, device, GetUsn(device.Udn, SsdpConstants.UpnpDeviceTypeRootDevice), endPoint, receivedOnlocalIpAddress, cancellationToken);
                 if (this.SupportPnpRootDevice)
+                {
                     SendSearchResponse(SsdpConstants.PnpDeviceTypeRootDevice, device, GetUsn(device.Udn, SsdpConstants.PnpDeviceTypeRootDevice), endPoint, receivedOnlocalIpAddress, cancellationToken);
+                }
             }
 
             SendSearchResponse(device.Udn, device, device.Udn, endPoint, receivedOnlocalIpAddress, cancellationToken);
@@ -308,7 +353,7 @@ namespace Rssdp.Infrastructure
         {
             var rootDevice = device.ToRootDevice();
 
-            //var additionalheaders = FormatCustomHeadersForResponse(device);
+            // var additionalheaders = FormatCustomHeadersForResponse(device);
 
             const string header = "HTTP/1.1 200 OK";
 
@@ -335,10 +380,9 @@ namespace Rssdp.Infrastructure
             }
             catch (Exception)
             {
-
             }
 
-            //WriteTrace(String.Format("Sent search response to " + endPoint.ToString()), device);
+            // WriteTrace(String.Format("Sent search response to " + endPoint.ToString()), device);
         }
 
         private bool IsDuplicateSearchRequest(string searchTarget, IPEndPoint endPoint)
@@ -352,15 +396,21 @@ namespace Rssdp.Infrastructure
                 {
                     var lastRequest = _RecentSearchRequests[newRequest.Key];
                     if (lastRequest.IsOld())
+                    {
                         _RecentSearchRequests[newRequest.Key] = newRequest;
+                    }
                     else
+                    {
                         isDuplicateRequest = true;
+                    }
                 }
                 else
                 {
                     _RecentSearchRequests.Add(newRequest.Key, newRequest);
                     if (_RecentSearchRequests.Count > 10)
+                    {
                         CleanUpRecentSearchRequestsAsync();
+                    }
                 }
             }
 
@@ -382,9 +432,12 @@ namespace Rssdp.Infrastructure
         {
             try
             {
-                if (IsDisposed) return;
+                if (IsDisposed)
+                {
+                    return;
+                }
 
-                //WriteTrace("Begin Sending Alive Notifications For All Devices");
+                // WriteTrace("Begin Sending Alive Notifications For All Devices");
 
                 SsdpRootDevice[] devices;
                 lock (_Devices)
@@ -394,12 +447,15 @@ namespace Rssdp.Infrastructure
 
                 foreach (var device in devices)
                 {
-                    if (IsDisposed) return;
+                    if (IsDisposed)
+                    {
+                        return;
+                    }
 
                     SendAliveNotifications(device, true, CancellationToken.None);
                 }
 
-                //WriteTrace("Completed Sending Alive Notifications For All Devices");
+                // WriteTrace("Completed Sending Alive Notifications For All Devices");
             }
             catch (ObjectDisposedException ex)
             {
@@ -414,7 +470,9 @@ namespace Rssdp.Infrastructure
             {
                 SendAliveNotification(device, SsdpConstants.UpnpDeviceTypeRootDevice, GetUsn(device.Udn, SsdpConstants.UpnpDeviceTypeRootDevice), cancellationToken);
                 if (this.SupportPnpRootDevice)
+                {
                     SendAliveNotification(device, SsdpConstants.PnpDeviceTypeRootDevice, GetUsn(device.Udn, SsdpConstants.PnpDeviceTypeRootDevice), cancellationToken);
+                }
             }
 
             SendAliveNotification(device, device.Udn, device.Udn, cancellationToken);
@@ -448,7 +506,7 @@ namespace Rssdp.Infrastructure
 
             _CommsServer.SendMulticastMessage(message, _sendOnlyMatchedHost ? rootDevice.Address : null, cancellationToken);
 
-            //WriteTrace(String.Format("Sent alive notification"), device);
+            // WriteTrace(String.Format("Sent alive notification"), device);
         }
 
         private Task SendByeByeNotifications(SsdpDevice device, bool isRoot, CancellationToken cancellationToken)
@@ -458,7 +516,9 @@ namespace Rssdp.Infrastructure
             {
                 tasks.Add(SendByeByeNotification(device, SsdpConstants.UpnpDeviceTypeRootDevice, GetUsn(device.Udn, SsdpConstants.UpnpDeviceTypeRootDevice), cancellationToken));
                 if (this.SupportPnpRootDevice)
+                {
                     tasks.Add(SendByeByeNotification(device, "pnp:rootdevice", GetUsn(device.Udn, "pnp:rootdevice"), cancellationToken));
+                }
             }
 
             tasks.Add(SendByeByeNotification(device, device.Udn, device.Udn, cancellationToken));
@@ -499,20 +559,27 @@ namespace Rssdp.Infrastructure
             var timer = _RebroadcastAliveNotificationsTimer;
             _RebroadcastAliveNotificationsTimer = null;
             if (timer != null)
+            {
                 timer.Dispose();
+            }
         }
 
         private TimeSpan GetMinimumNonZeroCacheLifetime()
         {
-            var nonzeroCacheLifetimesQuery = (from device
-                                                                                in _Devices
-                                              where device.CacheLifetime != TimeSpan.Zero
-                                              select device.CacheLifetime).ToList();
+            var nonzeroCacheLifetimesQuery = (
+                from device
+                in _Devices
+                where device.CacheLifetime != TimeSpan.Zero
+                select device.CacheLifetime).ToList();
 
             if (nonzeroCacheLifetimesQuery.Any())
+            {
                 return nonzeroCacheLifetimesQuery.Min();
+            }
             else
+            {
                 return TimeSpan.Zero;
+            }
         }
 
         private string GetFirstHeaderValue(System.Net.Http.Headers.HttpRequestHeaders httpRequestHeaders, string headerName)
@@ -520,7 +587,9 @@ namespace Rssdp.Infrastructure
             string retVal = null;
             IEnumerable<String> values = null;
             if (httpRequestHeaders.TryGetValues(headerName, out values) && values != null)
+            {
                 retVal = values.FirstOrDefault();
+            }
 
             return retVal;
         }
@@ -533,31 +602,38 @@ namespace Rssdp.Infrastructure
             {
                 LogFunction(text);
             }
-            //System.Diagnostics.Debug.WriteLine(text, "SSDP Publisher");
+            // System.Diagnostics.Debug.WriteLine(text, "SSDP Publisher");
         }
 
         private void WriteTrace(string text, SsdpDevice device)
         {
             var rootDevice = device as SsdpRootDevice;
             if (rootDevice != null)
+            {
                 WriteTrace(text + " " + device.DeviceType + " - " + device.Uuid + " - " + rootDevice.Location);
+            }
             else
+            {
                 WriteTrace(text + " " + device.DeviceType + " - " + device.Uuid);
+            }
         }
 
         private void CommsServer_RequestReceived(object sender, RequestReceivedEventArgs e)
         {
-            if (this.IsDisposed) return;
+            if (this.IsDisposed)
+            {
+                return;
+            }
 
             if (string.Equals(e.Message.Method.Method, SsdpConstants.MSearchMethod, StringComparison.OrdinalIgnoreCase))
             {
-                //According to SSDP/UPnP spec, ignore message if missing these headers.
+                // According to SSDP/UPnP spec, ignore message if missing these headers.
                 // Edit: But some devices do it anyway
-                //if (!e.Message.Headers.Contains("MX"))
+                // if (!e.Message.Headers.Contains("MX"))
                 //    WriteTrace("Ignoring search request - missing MX header.");
-                //else if (!e.Message.Headers.Contains("MAN"))
+                // else if (!e.Message.Headers.Contains("MAN"))
                 //    WriteTrace("Ignoring search request - missing MAN header.");
-                //else
+                // else
                 ProcessSearchRequest(GetFirstHeaderValue(e.Message.Headers, "MX"), GetFirstHeaderValue(e.Message.Headers, "ST"), e.ReceivedFrom, e.LocalIpAddress, CancellationToken.None);
             }
         }
@@ -565,7 +641,9 @@ namespace Rssdp.Infrastructure
         private class SearchRequest
         {
             public IPEndPoint EndPoint { get; set; }
+
             public DateTime Received { get; set; }
+
             public string SearchTarget { get; set; }
 
             public string Key

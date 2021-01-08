@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,6 +9,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Drawing;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.MediaInfo;
@@ -17,15 +20,20 @@ namespace MediaBrowser.Providers.MediaInfo
     public class VideoImageProvider : IDynamicImageProvider, IHasOrder
     {
         private readonly IMediaEncoder _mediaEncoder;
-        private readonly ILogger _logger;
+        private readonly ILogger<VideoImageProvider> _logger;
         private readonly IFileSystem _fileSystem;
 
-        public VideoImageProvider(IMediaEncoder mediaEncoder, ILogger logger, IFileSystem fileSystem)
+        public VideoImageProvider(IMediaEncoder mediaEncoder, ILogger<VideoImageProvider> logger, IFileSystem fileSystem)
         {
             _mediaEncoder = mediaEncoder;
             _logger = logger;
             _fileSystem = fileSystem;
         }
+
+        public string Name => "Screen Grabber";
+
+        // Make sure this comes after internet image providers
+        public int Order => 100;
 
         public IEnumerable<ImageType> GetSupportedImages(BaseItem item)
         {
@@ -43,7 +51,7 @@ namespace MediaBrowser.Providers.MediaInfo
             }
 
             // No support for this
-            if (video.VideoType == VideoType.Iso || video.VideoType == VideoType.Dvd || video.VideoType == VideoType.BluRay)
+            if (video.VideoType == VideoType.Dvd)
             {
                 return Task.FromResult(new DynamicImageResponse { HasImage = false });
             }
@@ -62,7 +70,7 @@ namespace MediaBrowser.Providers.MediaInfo
         {
             var protocol = item.PathProtocol ?? MediaProtocol.File;
 
-            var inputPath = MediaEncoderHelpers.GetInputArgument(_fileSystem, item.Path, null, item.GetPlayableStreamFileNames(_mediaEncoder));
+            var inputPath = item.Path;
 
             var mediaStreams =
                 item.GetMediaStreams();
@@ -89,13 +97,21 @@ namespace MediaBrowser.Providers.MediaInfo
                     {
                         videoIndex++;
                     }
+
                     if (mediaStream == imageStream)
                     {
                         break;
                     }
                 }
 
-                extractedImagePath = await _mediaEncoder.ExtractVideoImage(inputPath, item.Container, protocol, imageStream, videoIndex, cancellationToken).ConfigureAwait(false);
+                MediaSourceInfo mediaSource = new MediaSourceInfo
+                {
+                    VideoType = item.VideoType,
+                    IsoType = item.IsoType,
+                    Protocol = item.PathProtocol.Value,
+                };
+
+                extractedImagePath = await _mediaEncoder.ExtractVideoImage(inputPath, item.Container, mediaSource, imageStream, videoIndex, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -107,8 +123,14 @@ namespace MediaBrowser.Providers.MediaInfo
                                       : TimeSpan.FromSeconds(10);
 
                 var videoStream = mediaStreams.FirstOrDefault(i => i.Type == MediaStreamType.Video);
+                var mediaSource = new MediaSourceInfo
+                {
+                    VideoType = item.VideoType,
+                    IsoType = item.IsoType,
+                    Protocol = item.PathProtocol.Value,
+                };
 
-                extractedImagePath = await _mediaEncoder.ExtractVideoImage(inputPath, item.Container, protocol, videoStream, item.Video3DFormat, imageOffset, cancellationToken).ConfigureAwait(false);
+                extractedImagePath = await _mediaEncoder.ExtractVideoImage(inputPath, item.Container, mediaSource, videoStream, item.Video3DFormat, imageOffset, cancellationToken).ConfigureAwait(false);
             }
 
             return new DynamicImageResponse
@@ -120,14 +142,13 @@ namespace MediaBrowser.Providers.MediaInfo
             };
         }
 
-        public string Name => "Screen Grabber";
-
         public bool Supports(BaseItem item)
         {
             if (item.IsShortcut)
             {
                 return false;
             }
+
             if (!item.IsFileProtocol)
             {
                 return false;
@@ -142,7 +163,5 @@ namespace MediaBrowser.Providers.MediaInfo
 
             return false;
         }
-        // Make sure this comes after internet image providers
-        public int Order => 100;
     }
 }

@@ -1,16 +1,18 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using MediaBrowser.Controller.Entities;
+using Jellyfin.Data.Entities;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.MediaInfo;
-using MediaBrowser.Model.Session;
 using MediaBrowser.Model.Net;
+using MediaBrowser.Model.Session;
 
 namespace MediaBrowser.Controller.MediaEncoding
 {
@@ -18,22 +20,33 @@ namespace MediaBrowser.Controller.MediaEncoding
     public class EncodingJobInfo
     {
         public MediaStream VideoStream { get; set; }
+
         public VideoType VideoType { get; set; }
+
         public Dictionary<string, string> RemoteHttpHeaders { get; set; }
+
         public string OutputVideoCodec { get; set; }
+
         public MediaProtocol InputProtocol { get; set; }
+
         public string MediaPath { get; set; }
+
         public bool IsInputVideo { get; set; }
-        public IIsoMount IsoMount { get; set; }
-        public string[] PlayableStreamFileNames { get; set; }
+
         public string OutputAudioCodec { get; set; }
+
         public int? OutputVideoBitrate { get; set; }
+
         public MediaStream SubtitleStream { get; set; }
+
         public SubtitleDeliveryMethod SubtitleDeliveryMethod { get; set; }
+
         public string[] SupportedSubtitleCodecs { get; set; }
 
         public int InternalSubtitleStreamOffset { get; set; }
+
         public MediaSourceInfo MediaSource { get; set; }
+
         public User User { get; set; }
 
         public long? RunTimeTicks { get; set; }
@@ -112,13 +125,19 @@ namespace MediaBrowser.Controller.MediaEncoding
         public string AlbumCoverPath { get; set; }
 
         public string InputAudioSync { get; set; }
+
         public string InputVideoSync { get; set; }
+
         public TransportStreamTimestamp InputTimestamp { get; set; }
 
         public MediaStream AudioStream { get; set; }
+
         public string[] SupportedAudioCodecs { get; set; }
+
         public string[] SupportedVideoCodecs { get; set; }
+
         public string InputContainer { get; set; }
+
         public IsoType? IsoType { get; set; }
 
         public BaseEncodingJobOptions BaseRequest { get; set; }
@@ -264,6 +283,11 @@ namespace MediaBrowser.Controller.MediaEncoding
                 return BaseRequest.AudioChannels;
             }
 
+            if (BaseRequest.TranscodingMaxAudioChannels.HasValue)
+            {
+                return BaseRequest.TranscodingMaxAudioChannels;
+            }
+
             if (!string.IsNullOrEmpty(codec))
             {
                 var value = BaseRequest.GetOption(codec, "audiochannels");
@@ -278,13 +302,13 @@ namespace MediaBrowser.Controller.MediaEncoding
         }
 
         public bool IsVideoRequest { get; set; }
+
         public TranscodingJobType TranscodingType { get; set; }
 
         public EncodingJobInfo(TranscodingJobType jobType)
         {
             TranscodingType = jobType;
             RemoteHttpHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            PlayableStreamFileNames = Array.Empty<string>();
             SupportedAudioCodecs = Array.Empty<string>();
             SupportedVideoCodecs = Array.Empty<string>();
             SupportedSubtitleCodecs = Array.Empty<string>();
@@ -302,7 +326,7 @@ namespace MediaBrowser.Controller.MediaEncoding
                     return false;
                 }
 
-                return BaseRequest.BreakOnNonKeyFrames && string.Equals(videoCodec, "copy", StringComparison.OrdinalIgnoreCase);
+                return BaseRequest.BreakOnNonKeyFrames && EncodingHelper.IsCopyCodec(videoCodec);
             }
 
             return false;
@@ -316,13 +340,10 @@ namespace MediaBrowser.Controller.MediaEncoding
             {
                 if (VideoStream != null && VideoStream.Width.HasValue && VideoStream.Height.HasValue)
                 {
-                    var size = new ImageDimensions
-                    {
-                        Width = VideoStream.Width.Value,
-                        Height = VideoStream.Height.Value
-                    };
+                    var size = new ImageDimensions(VideoStream.Width.Value, VideoStream.Height.Value);
 
-                    var newSize = DrawingUtils.Resize(size,
+                    var newSize = DrawingUtils.Resize(
+                        size,
                         BaseRequest.Width ?? 0,
                         BaseRequest.Height ?? 0,
                         BaseRequest.MaxWidth ?? 0,
@@ -346,13 +367,10 @@ namespace MediaBrowser.Controller.MediaEncoding
             {
                 if (VideoStream != null && VideoStream.Width.HasValue && VideoStream.Height.HasValue)
                 {
-                    var size = new ImageDimensions
-                    {
-                        Width = VideoStream.Width.Value,
-                        Height = VideoStream.Height.Value
-                    };
+                    var size = new ImageDimensions(VideoStream.Width.Value, VideoStream.Height.Value);
 
-                    var newSize = DrawingUtils.Resize(size,
+                    var newSize = DrawingUtils.Resize(
+                        size,
                         BaseRequest.Width ?? 0,
                         BaseRequest.Height ?? 0,
                         BaseRequest.MaxWidth ?? 0,
@@ -375,7 +393,7 @@ namespace MediaBrowser.Controller.MediaEncoding
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputAudioCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputAudioCodec))
                 {
                     if (AudioStream != null)
                     {
@@ -386,7 +404,7 @@ namespace MediaBrowser.Controller.MediaEncoding
                 {
                     // Don't exceed what the encoder supports
                     // Seeing issues of attempting to encode to 88200
-                    return Math.Min(44100, BaseRequest.AudioSampleRate.Value);
+                    return BaseRequest.AudioSampleRate.Value;
                 }
 
                 return null;
@@ -398,7 +416,7 @@ namespace MediaBrowser.Controller.MediaEncoding
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputAudioCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputAudioCodec))
                 {
                     if (AudioStream != null)
                     {
@@ -411,13 +429,13 @@ namespace MediaBrowser.Controller.MediaEncoding
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public double? TargetVideoLevel
         {
             get
             {
-                if (BaseRequest.Static || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                if (BaseRequest.Static || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.Level;
                 }
@@ -434,14 +452,14 @@ namespace MediaBrowser.Controller.MediaEncoding
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public int? TargetVideoBitDepth
         {
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.BitDepth;
                 }
@@ -459,7 +477,7 @@ namespace MediaBrowser.Controller.MediaEncoding
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.RefFrames;
                 }
@@ -469,14 +487,14 @@ namespace MediaBrowser.Controller.MediaEncoding
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public float? TargetFramerate
         {
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream == null ? null : (VideoStream.AverageFrameRate ?? VideoStream.RealFrameRate);
                 }
@@ -501,13 +519,13 @@ namespace MediaBrowser.Controller.MediaEncoding
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public int? TargetPacketLength
         {
             get
             {
-                if (BaseRequest.Static || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                if (BaseRequest.Static || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.PacketLength;
                 }
@@ -517,13 +535,13 @@ namespace MediaBrowser.Controller.MediaEncoding
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public string TargetVideoProfile
         {
             get
             {
-                if (BaseRequest.Static || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                if (BaseRequest.Static || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.Profile;
                 }
@@ -543,7 +561,7 @@ namespace MediaBrowser.Controller.MediaEncoding
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.CodecTag;
                 }
@@ -557,7 +575,7 @@ namespace MediaBrowser.Controller.MediaEncoding
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.IsAnamorphic;
                 }
@@ -570,7 +588,12 @@ namespace MediaBrowser.Controller.MediaEncoding
         {
             get
             {
-                if (string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                if (VideoStream == null)
+                {
+                    return null;
+                }
+
+                if (EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.Codec;
                 }
@@ -583,7 +606,12 @@ namespace MediaBrowser.Controller.MediaEncoding
         {
             get
             {
-                if (string.Equals(OutputAudioCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                if (AudioStream == null)
+                {
+                    return null;
+                }
+
+                if (EncodingHelper.IsCopyCodec(OutputAudioCodec))
                 {
                     return AudioStream?.Codec;
                 }
@@ -597,7 +625,7 @@ namespace MediaBrowser.Controller.MediaEncoding
             get
             {
                 if (BaseRequest.Static
-                    || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                    || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.IsInterlaced;
                 }
@@ -615,7 +643,7 @@ namespace MediaBrowser.Controller.MediaEncoding
         {
             get
             {
-                if (BaseRequest.Static || string.Equals(OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                if (BaseRequest.Static || EncodingHelper.IsCopyCodec(OutputVideoCodec))
                 {
                     return VideoStream?.IsAVC;
                 }
@@ -665,27 +693,30 @@ namespace MediaBrowser.Controller.MediaEncoding
         }
 
         public IProgress<double> Progress { get; set; }
-        public virtual void ReportTranscodingProgress(TimeSpan? transcodingPosition, float framerate, double? percentComplete, long bytesTranscoded, int? bitRate)
+
+        public virtual void ReportTranscodingProgress(TimeSpan? transcodingPosition, float? framerate, double? percentComplete, long? bytesTranscoded, int? bitRate)
         {
             Progress.Report(percentComplete.Value);
         }
     }
 
     /// <summary>
-    /// Enum TranscodingJobType
+    /// Enum TranscodingJobType.
     /// </summary>
     public enum TranscodingJobType
     {
         /// <summary>
-        /// The progressive
+        /// The progressive.
         /// </summary>
         Progressive,
+
         /// <summary>
-        /// The HLS
+        /// The HLS.
         /// </summary>
         Hls,
+
         /// <summary>
-        /// The dash
+        /// The dash.
         /// </summary>
         Dash
     }

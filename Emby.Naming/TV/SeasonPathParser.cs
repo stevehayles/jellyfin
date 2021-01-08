@@ -1,29 +1,14 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 
 namespace Emby.Naming.TV
 {
-    public class SeasonPathParser
+    /// <summary>
+    /// Class to parse season paths.
+    /// </summary>
+    public static class SeasonPathParser
     {
-        public SeasonPathParserResult Parse(string path, bool supportSpecialAliases, bool supportNumericSeasonFolders)
-        {
-            var result = new SeasonPathParserResult();
-
-            var seasonNumberInfo = GetSeasonNumberFromPath(path, supportSpecialAliases, supportNumericSeasonFolders);
-
-            result.SeasonNumber = seasonNumberInfo.seasonNumber;
-
-            if (result.SeasonNumber.HasValue)
-            {
-                result.Success = true;
-                result.IsSeasonFolder = seasonNumberInfo.isSeasonFolder;
-            }
-
-            return result;
-        }
-
         /// <summary>
         /// A season folder must contain one of these somewhere in the name.
         /// </summary>
@@ -38,6 +23,30 @@ namespace Emby.Naming.TV
             "сезон",
             "stagione"
         };
+
+        /// <summary>
+        /// Attempts to parse season number from path.
+        /// </summary>
+        /// <param name="path">Path to season.</param>
+        /// <param name="supportSpecialAliases">Support special aliases when parsing.</param>
+        /// <param name="supportNumericSeasonFolders">Support numeric season folders when parsing.</param>
+        /// <returns>Returns <see cref="SeasonPathParserResult"/> object.</returns>
+        public static SeasonPathParserResult Parse(string path, bool supportSpecialAliases, bool supportNumericSeasonFolders)
+        {
+            var result = new SeasonPathParserResult();
+
+            var (seasonNumber, isSeasonFolder) = GetSeasonNumberFromPath(path, supportSpecialAliases, supportNumericSeasonFolders);
+
+            result.SeasonNumber = seasonNumber;
+
+            if (result.SeasonNumber.HasValue)
+            {
+                result.Success = true;
+                result.IsSeasonFolder = isSeasonFolder;
+            }
+
+            return result;
+        }
 
         /// <summary>
         /// Gets the season number from path.
@@ -76,7 +85,7 @@ namespace Emby.Naming.TV
 
             if (filename.StartsWith("s", StringComparison.OrdinalIgnoreCase))
             {
-                var testFilename = filename.Substring(1);
+                var testFilename = filename.AsSpan().Slice(1);
 
                 if (int.TryParse(testFilename, NumberStyles.Integer, CultureInfo.InvariantCulture, out var val))
                 {
@@ -87,12 +96,10 @@ namespace Emby.Naming.TV
             // Look for one of the season folder names
             foreach (var name in _seasonFolderNames)
             {
-                var index = filename.IndexOf(name, StringComparison.OrdinalIgnoreCase);
-
-                if (index != -1)
+                if (filename.Contains(name, StringComparison.OrdinalIgnoreCase))
                 {
                     var result = GetSeasonNumberFromPathSubstring(filename.Replace(name, " ", StringComparison.OrdinalIgnoreCase));
-                    if (result.Item1.HasValue)
+                    if (result.seasonNumber.HasValue)
                     {
                         return result;
                     }
@@ -102,25 +109,32 @@ namespace Emby.Naming.TV
             }
 
             var parts = filename.Split(new[] { '.', '_', ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
-            var resultNumber = parts.Select(GetSeasonNumberFromPart).FirstOrDefault(i => i.HasValue);
-            return (resultNumber, true);
+            foreach (var part in parts)
+            {
+                if (TryGetSeasonNumberFromPart(part, out int seasonNumber))
+                {
+                    return (seasonNumber, true);
+                }
+            }
+
+            return (null, true);
         }
 
-        private static int? GetSeasonNumberFromPart(string part)
+        private static bool TryGetSeasonNumberFromPart(ReadOnlySpan<char> part, out int seasonNumber)
         {
+            seasonNumber = 0;
             if (part.Length < 2 || !part.StartsWith("s", StringComparison.OrdinalIgnoreCase))
             {
-                return null;
+                return false;
             }
 
-            part = part.Substring(1);
-
-            if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+            if (int.TryParse(part.Slice(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
             {
-                return value;
+                seasonNumber = value;
+                return true;
             }
 
-            return null;
+            return false;
         }
 
         /// <summary>
@@ -128,25 +142,26 @@ namespace Emby.Naming.TV
         /// </summary>
         /// <param name="path">The path.</param>
         /// <returns>System.Nullable{System.Int32}.</returns>
-        private static (int? seasonNumber, bool isSeasonFolder) GetSeasonNumberFromPathSubstring(string path)
+        private static (int? seasonNumber, bool isSeasonFolder) GetSeasonNumberFromPathSubstring(ReadOnlySpan<char> path)
         {
             var numericStart = -1;
             var length = 0;
 
-            var hasOpenParenth = false;
+            var hasOpenParenthesis = false;
             var isSeasonFolder = true;
 
             // Find out where the numbers start, and then keep going until they end
             for (var i = 0; i < path.Length; i++)
             {
-                if (char.IsNumber(path, i))
+                if (char.IsNumber(path[i]))
                 {
-                    if (!hasOpenParenth)
+                    if (!hasOpenParenthesis)
                     {
                         if (numericStart == -1)
                         {
                             numericStart = i;
                         }
+
                         length++;
                     }
                 }
@@ -158,13 +173,13 @@ namespace Emby.Naming.TV
                 }
 
                 var currentChar = path[i];
-                if (currentChar.Equals('('))
+                if (currentChar == '(')
                 {
-                    hasOpenParenth = true;
+                    hasOpenParenthesis = true;
                 }
-                else if (currentChar.Equals(')'))
+                else if (currentChar == ')')
                 {
-                    hasOpenParenth = false;
+                    hasOpenParenthesis = false;
                 }
             }
 
@@ -173,7 +188,7 @@ namespace Emby.Naming.TV
                 return (null, isSeasonFolder);
             }
 
-            return (int.Parse(path.Substring(numericStart, length), CultureInfo.InvariantCulture), isSeasonFolder);
+            return (int.Parse(path.Slice(numericStart, length), provider: CultureInfo.InvariantCulture), isSeasonFolder);
         }
     }
 }

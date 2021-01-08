@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -5,18 +7,23 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Extensions;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Playlists;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PlaylistsNET.Content;
 using PlaylistsNET.Models;
+using Genre = MediaBrowser.Controller.Entities.Genre;
+using MusicAlbum = MediaBrowser.Controller.Entities.Audio.MusicAlbum;
 
 namespace Emby.Server.Implementations.Playlists
 {
@@ -25,24 +32,27 @@ namespace Emby.Server.Implementations.Playlists
         private readonly ILibraryManager _libraryManager;
         private readonly IFileSystem _fileSystem;
         private readonly ILibraryMonitor _iLibraryMonitor;
-        private readonly ILogger _logger;
+        private readonly ILogger<PlaylistManager> _logger;
         private readonly IUserManager _userManager;
         private readonly IProviderManager _providerManager;
+        private readonly IConfiguration _appConfig;
 
         public PlaylistManager(
             ILibraryManager libraryManager,
             IFileSystem fileSystem,
             ILibraryMonitor iLibraryMonitor,
-            ILoggerFactory loggerFactory,
+            ILogger<PlaylistManager> logger,
             IUserManager userManager,
-            IProviderManager providerManager)
+            IProviderManager providerManager,
+            IConfiguration appConfig)
         {
             _libraryManager = libraryManager;
             _fileSystem = fileSystem;
             _iLibraryMonitor = iLibraryMonitor;
-            _logger = loggerFactory.CreateLogger(nameof(PlaylistManager));
+            _logger = logger;
             _userManager = userManager;
             _providerManager = providerManager;
+            _appConfig = appConfig;
         }
 
         public IEnumerable<Playlist> GetPlaylists(Guid userId)
@@ -56,10 +66,8 @@ namespace Emby.Server.Implementations.Playlists
         {
             var name = options.Name;
 
-            var folderName = _fileSystem.GetValidFilename(name) + " [playlist]";
-
+            var folderName = _fileSystem.GetValidFilename(name);
             var parentFolder = GetPlaylistsFolder(Guid.Empty);
-
             if (parentFolder == null)
             {
                 throw new ArgumentException();
@@ -142,18 +150,15 @@ namespace Emby.Server.Implementations.Playlists
                 await playlist.RefreshMetadata(new MetadataRefreshOptions(new DirectoryService(_fileSystem)) { ForceSave = true }, CancellationToken.None)
                     .ConfigureAwait(false);
 
-                if (options.ItemIdList.Length > 0)
+                if (options.ItemIdList.Count > 0)
                 {
-                    AddToPlaylistInternal(playlist.Id.ToString("N", CultureInfo.InvariantCulture), options.ItemIdList, user, new DtoOptions(false)
+                    await AddToPlaylistInternal(playlist.Id, options.ItemIdList, user, new DtoOptions(false)
                     {
                         EnableImages = true
-                    });
+                    }).ConfigureAwait(false);
                 }
 
-                return new PlaylistCreationResult
-                {
-                    Id = playlist.Id.ToString("N", CultureInfo.InvariantCulture)
-                };
+                return new PlaylistCreationResult(playlist.Id.ToString("N", CultureInfo.InvariantCulture));
             }
             finally
             {
@@ -179,47 +184,69 @@ namespace Emby.Server.Implementations.Playlists
             return Playlist.GetPlaylistItems(playlistMediaType, items, user, options);
         }
 
-        public void AddToPlaylist(string playlistId, IEnumerable<Guid> itemIds, Guid userId)
+        public Task AddToPlaylistAsync(Guid playlistId, IReadOnlyCollection<Guid> itemIds, Guid userId)
         {
             var user = userId.Equals(Guid.Empty) ? null : _userManager.GetUserById(userId);
 
-            AddToPlaylistInternal(playlistId, itemIds, user, new DtoOptions(false)
+            return AddToPlaylistInternal(playlistId, itemIds, user, new DtoOptions(false)
             {
                 EnableImages = true
             });
         }
 
-        private void AddToPlaylistInternal(string playlistId, IEnumerable<Guid> itemIds, User user, DtoOptions options)
+        private async Task AddToPlaylistInternal(Guid playlistId, IReadOnlyCollection<Guid> newItemIds, User user, DtoOptions options)
         {
-            var playlist = _libraryManager.GetItemById(playlistId) as Playlist;
+            // Retrieve the existing playlist
+            var playlist = _libraryManager.GetItemById(playlistId) as Playlist
+                ?? throw new ArgumentException("No Playlist exists with Id " + playlistId);
 
-            if (playlist == null)
+            // Retrieve all the items to be added to the playlist
+            var newItems = GetPlaylistItems(newItemIds, playlist.MediaType, user, options)
+                .Where(i => i.SupportsAddingToPlaylist);
+
+            // Filter out duplicate items, if necessary
+            if (!_appConfig.DoPlaylistsAllowDuplicates())
             {
-                throw new ArgumentException("No Playlist exists with the supplied Id");
+                var existingIds = playlist.LinkedChildren.Select(c => c.ItemId).ToHashSet();
+                newItems = newItems
+                    .Where(i => !existingIds.Contains(i.Id))
+                    .Distinct();
             }
 
-            var list = new List<LinkedChild>();
-
-            var items = GetPlaylistItems(itemIds, playlist.MediaType, user, options)
-                .Where(i => i.SupportsAddingToPlaylist)
+            // Create a list of the new linked children to add to the playlist
+            var childrenToAdd = newItems
+                .Select(i => LinkedChild.Create(i))
                 .ToList();
 
-            foreach (var item in items)
+            // Log duplicates that have been ignored, if any
+            int numDuplicates = newItemIds.Count - childrenToAdd.Count;
+            if (numDuplicates > 0)
             {
-                list.Add(LinkedChild.Create(item));
+                _logger.LogWarning("Ignored adding {DuplicateCount} duplicate items to playlist {PlaylistName}.", numDuplicates, playlist.Name);
             }
 
-            var newList = playlist.LinkedChildren.ToList();
-            newList.AddRange(list);
-            playlist.LinkedChildren = newList.ToArray();
+            // Do nothing else if there are no items to add to the playlist
+            if (childrenToAdd.Count == 0)
+            {
+                return;
+            }
 
-            playlist.UpdateToRepository(ItemUpdateType.MetadataEdit, CancellationToken.None);
+            // Create a new array with the updated playlist items
+            var newLinkedChildren = new LinkedChild[playlist.LinkedChildren.Length + childrenToAdd.Count];
+            playlist.LinkedChildren.CopyTo(newLinkedChildren, 0);
+            childrenToAdd.CopyTo(newLinkedChildren, playlist.LinkedChildren.Length);
 
+            // Update the playlist in the repository
+            playlist.LinkedChildren = newLinkedChildren;
+            await playlist.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+
+            // Update the playlist on disk
             if (playlist.IsFile)
             {
                 SavePlaylistFile(playlist);
             }
 
+            // Refresh playlist metadata
             _providerManager.QueueRefresh(
                 playlist.Id,
                 new MetadataRefreshOptions(new DirectoryService(_fileSystem))
@@ -229,7 +256,7 @@ namespace Emby.Server.Implementations.Playlists
                 RefreshPriority.High);
         }
 
-        public void RemoveFromPlaylist(string playlistId, IEnumerable<string> entryIds)
+        public async Task RemoveFromPlaylistAsync(string playlistId, IEnumerable<string> entryIds)
         {
             if (!(_libraryManager.GetItemById(playlistId) is Playlist playlist))
             {
@@ -246,21 +273,23 @@ namespace Emby.Server.Implementations.Playlists
                 .Select(i => i.Item1)
                 .ToArray();
 
-            playlist.UpdateToRepository(ItemUpdateType.MetadataEdit, CancellationToken.None);
+            await playlist.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
 
             if (playlist.IsFile)
             {
                 SavePlaylistFile(playlist);
             }
 
-            _providerManager.QueueRefresh(playlist.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-            {
-                ForceSave = true
-
-            }, RefreshPriority.High);
+            _providerManager.QueueRefresh(
+                playlist.Id,
+                new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                {
+                    ForceSave = true
+                },
+                RefreshPriority.High);
         }
 
-        public void MoveItem(string playlistId, string entryId, int newIndex)
+        public async Task MoveItemAsync(string playlistId, string entryId, int newIndex)
         {
             if (!(_libraryManager.GetItemById(playlistId) is Playlist playlist))
             {
@@ -293,7 +322,7 @@ namespace Emby.Server.Implementations.Playlists
 
             playlist.LinkedChildren = newList.ToArray();
 
-            playlist.UpdateToRepository(ItemUpdateType.MetadataEdit, CancellationToken.None);
+            await playlist.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
 
             if (playlist.IsFile)
             {
@@ -303,7 +332,8 @@ namespace Emby.Server.Implementations.Playlists
 
         private void SavePlaylistFile(Playlist item)
         {
-            // This is probably best done as a metatata provider, but saving a file over itself will first require some core work to prevent this from happening when not needed
+            // this is probably best done as a metadata provider
+            // saving a file over itself will require some work to prevent this from happening when not needed
             var playlistPath = item.Path;
             var extension = Path.GetExtension(playlistPath);
 
@@ -319,28 +349,28 @@ namespace Emby.Server.Implementations.Playlists
                         AlbumTitle = child.Album
                     };
 
-                    var hasAlbumArtist = child as IHasAlbumArtist;
-                    if (hasAlbumArtist != null)
+                    if (child is IHasAlbumArtist hasAlbumArtist)
                     {
-                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.FirstOrDefault();
+                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.Count > 0 ? hasAlbumArtist.AlbumArtists[0] : null;
                     }
 
-                    var hasArtist = child as IHasArtist;
-                    if (hasArtist != null)
+                    if (child is IHasArtist hasArtist)
                     {
-                        entry.TrackArtist = hasArtist.Artists.FirstOrDefault();
+                        entry.TrackArtist = hasArtist.Artists.Count > 0 ? hasArtist.Artists[0] : null;
                     }
 
                     if (child.RunTimeTicks.HasValue)
                     {
                         entry.Duration = TimeSpan.FromTicks(child.RunTimeTicks.Value);
                     }
+
                     playlist.PlaylistEntries.Add(entry);
                 }
 
                 string text = new WplContent().ToText(playlist);
                 File.WriteAllText(playlistPath, text);
             }
+
             if (string.Equals(".zpl", extension, StringComparison.OrdinalIgnoreCase))
             {
                 var playlist = new ZplPlaylist();
@@ -353,32 +383,34 @@ namespace Emby.Server.Implementations.Playlists
                         AlbumTitle = child.Album
                     };
 
-                    var hasAlbumArtist = child as IHasAlbumArtist;
-                    if (hasAlbumArtist != null)
+                    if (child is IHasAlbumArtist hasAlbumArtist)
                     {
-                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.FirstOrDefault();
+                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.Count > 0 ? hasAlbumArtist.AlbumArtists[0] : null;
                     }
 
-                    var hasArtist = child as IHasArtist;
-                    if (hasArtist != null)
+                    if (child is IHasArtist hasArtist)
                     {
-                        entry.TrackArtist = hasArtist.Artists.FirstOrDefault();
+                        entry.TrackArtist = hasArtist.Artists.Count > 0 ? hasArtist.Artists[0] : null;
                     }
 
                     if (child.RunTimeTicks.HasValue)
                     {
                         entry.Duration = TimeSpan.FromTicks(child.RunTimeTicks.Value);
                     }
+
                     playlist.PlaylistEntries.Add(entry);
                 }
 
                 string text = new ZplContent().ToText(playlist);
                 File.WriteAllText(playlistPath, text);
             }
+
             if (string.Equals(".m3u", extension, StringComparison.OrdinalIgnoreCase))
             {
-                var playlist = new M3uPlaylist();
-                playlist.IsExtended = true;
+                var playlist = new M3uPlaylist
+                {
+                    IsExtended = true
+                };
                 foreach (var child in item.GetLinkedChildren())
                 {
                     var entry = new M3uPlaylistEntry()
@@ -388,22 +420,23 @@ namespace Emby.Server.Implementations.Playlists
                         Album = child.Album
                     };
 
-                    var hasAlbumArtist = child as IHasAlbumArtist;
-                    if (hasAlbumArtist != null)
+                    if (child is IHasAlbumArtist hasAlbumArtist)
                     {
-                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.FirstOrDefault();
+                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.Count > 0 ? hasAlbumArtist.AlbumArtists[0] : null;
                     }
 
                     if (child.RunTimeTicks.HasValue)
                     {
                         entry.Duration = TimeSpan.FromTicks(child.RunTimeTicks.Value);
                     }
+
                     playlist.PlaylistEntries.Add(entry);
                 }
 
                 string text = new M3uContent().ToText(playlist);
                 File.WriteAllText(playlistPath, text);
             }
+
             if (string.Equals(".m3u8", extension, StringComparison.OrdinalIgnoreCase))
             {
                 var playlist = new M3uPlaylist();
@@ -417,22 +450,23 @@ namespace Emby.Server.Implementations.Playlists
                         Album = child.Album
                     };
 
-                    var hasAlbumArtist = child as IHasAlbumArtist;
-                    if (hasAlbumArtist != null)
+                    if (child is IHasAlbumArtist hasAlbumArtist)
                     {
-                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.FirstOrDefault();
+                        entry.AlbumArtist = hasAlbumArtist.AlbumArtists.Count > 0 ? hasAlbumArtist.AlbumArtists[0] : null;
                     }
 
                     if (child.RunTimeTicks.HasValue)
                     {
                         entry.Duration = TimeSpan.FromTicks(child.RunTimeTicks.Value);
                     }
+
                     playlist.PlaylistEntries.Add(entry);
                 }
 
-                string text = new M3u8Content().ToText(playlist);
+                string text = new M3uContent().ToText(playlist);
                 File.WriteAllText(playlistPath, text);
             }
+
             if (string.Equals(".pls", extension, StringComparison.OrdinalIgnoreCase))
             {
                 var playlist = new PlsPlaylist();
@@ -448,6 +482,7 @@ namespace Emby.Server.Implementations.Playlists
                     {
                         entry.Length = TimeSpan.FromTicks(child.RunTimeTicks.Value);
                     }
+
                     playlist.PlaylistEntries.Add(entry);
                 }
 
@@ -473,15 +508,19 @@ namespace Emby.Server.Implementations.Playlists
                 throw new ArgumentException("File absolute path was null or empty.", nameof(fileAbsolutePath));
             }
 
-            if (!folderPath.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            if (!folderPath.EndsWith(Path.DirectorySeparatorChar))
             {
-                folderPath = folderPath + Path.DirectorySeparatorChar;
+                folderPath += Path.DirectorySeparatorChar;
             }
 
             var folderUri = new Uri(folderPath);
             var fileAbsoluteUri = new Uri(fileAbsolutePath);
 
-            if (folderUri.Scheme != fileAbsoluteUri.Scheme) { return fileAbsolutePath; } // path can't be made relative.
+            // path can't be made relative
+            if (folderUri.Scheme != fileAbsoluteUri.Scheme)
+            {
+                return fileAbsolutePath;
+            }
 
             var relativeUri = folderUri.MakeRelativeUri(fileAbsoluteUri);
             string relativePath = Uri.UnescapeDataString(relativeUri.ToString());
@@ -494,24 +533,12 @@ namespace Emby.Server.Implementations.Playlists
             return relativePath;
         }
 
-        private static string UnEscape(string content)
-        {
-            if (content == null) return content;
-            return content.Replace("&amp;", "&").Replace("&apos;", "'").Replace("&quot;", "\"").Replace("&gt;", ">").Replace("&lt;", "<");
-        }
-
-        private static string Escape(string content)
-        {
-            if (content == null) return null;
-            return content.Replace("&", "&amp;").Replace("'", "&apos;").Replace("\"", "&quot;").Replace(">", "&gt;").Replace("<", "&lt;");
-        }
-
         public Folder GetPlaylistsFolder(Guid userId)
         {
-            var typeName = "PlaylistsFolder";
+            const string TypeName = "PlaylistsFolder";
 
-            return _libraryManager.RootFolder.Children.OfType<Folder>().FirstOrDefault(i => string.Equals(i.GetType().Name, typeName, StringComparison.Ordinal)) ??
-                _libraryManager.GetUserRootFolder().Children.OfType<Folder>().FirstOrDefault(i => string.Equals(i.GetType().Name, typeName, StringComparison.Ordinal));
+            return _libraryManager.RootFolder.Children.OfType<Folder>().FirstOrDefault(i => string.Equals(i.GetType().Name, TypeName, StringComparison.Ordinal)) ??
+                _libraryManager.GetUserRootFolder().Children.OfType<Folder>().FirstOrDefault(i => string.Equals(i.GetType().Name, TypeName, StringComparison.Ordinal));
         }
     }
 }

@@ -1,9 +1,12 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Library;
 using MediaBrowser.Model.Querying;
@@ -60,14 +63,7 @@ namespace MediaBrowser.Controller.Entities
                 PresetViews = query.PresetViews
             });
 
-            var itemsArray = result;
-            var totalCount = itemsArray.Length;
-
-            return new QueryResult<BaseItem>
-            {
-                TotalRecordCount = totalCount,
-                Items = itemsArray //TODO Fix The co-variant conversion between Folder[] and BaseItem[], this can generate runtime issues.
-            };
+            return UserViewBuilder.SortAndPage(result, null, query, LibraryManager, true);
         }
 
         public override int GetChildCount(User user)

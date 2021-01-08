@@ -1,18 +1,21 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Extensions;
+using MediaBrowser.Common.Json;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
-using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace Emby.Server.Implementations.Library
@@ -21,15 +24,13 @@ namespace Emby.Server.Implementations.Library
     {
         private readonly IMediaEncoder _mediaEncoder;
         private readonly ILogger _logger;
+        private readonly IApplicationPaths _appPaths;
+        private readonly JsonSerializerOptions _jsonOptions = JsonDefaults.GetOptions();
 
-        private IJsonSerializer _json;
-        private IApplicationPaths _appPaths;
-
-        public LiveStreamHelper(IMediaEncoder mediaEncoder, ILogger logger, IJsonSerializer json, IApplicationPaths appPaths)
+        public LiveStreamHelper(IMediaEncoder mediaEncoder, ILogger logger, IApplicationPaths appPaths)
         {
             _mediaEncoder = mediaEncoder;
             _logger = logger;
-            _json = json;
             _appPaths = appPaths;
         }
 
@@ -46,9 +47,10 @@ namespace Emby.Server.Implementations.Library
             {
                 try
                 {
-                    mediaInfo = _json.DeserializeFromFile<MediaInfo>(cacheFilePath);
+                    await using FileStream jsonStream = File.OpenRead(cacheFilePath);
+                    mediaInfo = await JsonSerializer.DeserializeAsync<MediaInfo>(jsonStream, _jsonOptions, cancellationToken).ConfigureAwait(false);
 
-                    //_logger.LogDebug("Found cached media info");
+                    // _logger.LogDebug("Found cached media info");
                 }
                 catch
                 {
@@ -70,20 +72,22 @@ namespace Emby.Server.Implementations.Library
 
                 mediaSource.AnalyzeDurationMs = 3000;
 
-                mediaInfo = await _mediaEncoder.GetMediaInfo(new MediaInfoRequest
-                {
-                    MediaSource = mediaSource,
-                    MediaType = isAudio ? DlnaProfileType.Audio : DlnaProfileType.Video,
-                    ExtractChapters = false
-
-                }, cancellationToken).ConfigureAwait(false);
+                mediaInfo = await _mediaEncoder.GetMediaInfo(
+                    new MediaInfoRequest
+                    {
+                        MediaSource = mediaSource,
+                        MediaType = isAudio ? DlnaProfileType.Audio : DlnaProfileType.Video,
+                        ExtractChapters = false
+                    },
+                    cancellationToken).ConfigureAwait(false);
 
                 if (cacheFilePath != null)
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath));
-                    _json.SerializeToFile(mediaInfo, cacheFilePath);
+                    await using FileStream createStream = File.OpenWrite(cacheFilePath);
+                    await JsonSerializer.SerializeAsync(createStream, mediaInfo, _jsonOptions, cancellationToken).ConfigureAwait(false);
 
-                    //_logger.LogDebug("Saved media info to {0}", cacheFilePath);
+                    // _logger.LogDebug("Saved media info to {0}", cacheFilePath);
                 }
             }
 
@@ -124,7 +128,7 @@ namespace Emby.Server.Implementations.Library
                 mediaSource.RunTimeTicks = null;
             }
 
-            var audioStream = mediaStreams.FirstOrDefault(i => i.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio);
+            var audioStream = mediaStreams.FirstOrDefault(i => i.Type == MediaStreamType.Audio);
 
             if (audioStream == null || audioStream.Index == -1)
             {
@@ -135,7 +139,7 @@ namespace Emby.Server.Implementations.Library
                 mediaSource.DefaultAudioStreamIndex = audioStream.Index;
             }
 
-            var videoStream = mediaStreams.FirstOrDefault(i => i.Type == MediaBrowser.Model.Entities.MediaStreamType.Video);
+            var videoStream = mediaStreams.FirstOrDefault(i => i.Type == MediaStreamType.Video);
             if (videoStream != null)
             {
                 if (!videoStream.BitRate.HasValue)
@@ -146,17 +150,14 @@ namespace Emby.Server.Implementations.Library
                     {
                         videoStream.BitRate = 30000000;
                     }
-
                     else if (width >= 1900)
                     {
                         videoStream.BitRate = 20000000;
                     }
-
                     else if (width >= 1200)
                     {
                         videoStream.BitRate = 8000000;
                     }
-
                     else if (width >= 700)
                     {
                         videoStream.BitRate = 2000000;

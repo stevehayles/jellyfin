@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Globalization;
 using System.Linq;
@@ -20,9 +22,12 @@ namespace Emby.Server.Implementations.LiveTv
 {
     public class LiveTvDtoService
     {
-        private readonly ILogger _logger;
-        private readonly IImageProcessor _imageProcessor;
+        private const string InternalVersionNumber = "4";
 
+        private const string ServiceName = "Emby";
+
+        private readonly ILogger<LiveTvDtoService> _logger;
+        private readonly IImageProcessor _imageProcessor;
         private readonly IDtoService _dtoService;
         private readonly IApplicationHost _appHost;
         private readonly ILibraryManager _libraryManager;
@@ -30,13 +35,13 @@ namespace Emby.Server.Implementations.LiveTv
         public LiveTvDtoService(
             IDtoService dtoService,
             IImageProcessor imageProcessor,
-            ILoggerFactory loggerFactory,
+            ILogger<LiveTvDtoService> logger,
             IApplicationHost appHost,
             ILibraryManager libraryManager)
         {
             _dtoService = dtoService;
             _imageProcessor = imageProcessor;
-            _logger = loggerFactory.CreateLogger(nameof(LiveTvDtoService));
+            _logger = logger;
             _appHost = appHost;
             _libraryManager = libraryManager;
         }
@@ -154,12 +159,11 @@ namespace Emby.Server.Implementations.LiveTv
         {
             var librarySeries = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                IncludeItemTypes = new string[] { typeof(Series).Name },
+                IncludeItemTypes = new string[] { nameof(Series) },
                 Name = seriesName,
                 Limit = 1,
                 ImageTypes = new ImageType[] { ImageType.Thumb },
                 DtoOptions = new DtoOptions(false)
-
             }).FirstOrDefault();
 
             if (librarySeries != null)
@@ -177,6 +181,7 @@ namespace Emby.Server.Implementations.LiveTv
                         _logger.LogError(ex, "Error");
                     }
                 }
+
                 image = librarySeries.GetImageInfo(ImageType.Backdrop, 0);
                 if (image != null)
                 {
@@ -197,13 +202,12 @@ namespace Emby.Server.Implementations.LiveTv
 
             var program = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                IncludeItemTypes = new string[] { typeof(LiveTvProgram).Name },
+                IncludeItemTypes = new string[] { nameof(LiveTvProgram) },
                 ExternalSeriesId = programSeriesId,
                 Limit = 1,
                 ImageTypes = new ImageType[] { ImageType.Primary },
                 DtoOptions = new DtoOptions(false),
                 Name = string.IsNullOrEmpty(programSeriesId) ? seriesName : null
-
             }).FirstOrDefault();
 
             if (program != null)
@@ -230,9 +234,10 @@ namespace Emby.Server.Implementations.LiveTv
                         try
                         {
                             dto.ParentBackdropImageTags = new string[]
-                        {
+                            {
                                 _imageProcessor.GetImageCacheTag(program, image)
-                        };
+                            };
+
                             dto.ParentBackdropItemId = program.Id.ToString("N", CultureInfo.InvariantCulture);
                         }
                         catch (Exception ex)
@@ -248,12 +253,11 @@ namespace Emby.Server.Implementations.LiveTv
         {
             var librarySeries = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                IncludeItemTypes = new string[] { typeof(Series).Name },
+                IncludeItemTypes = new string[] { nameof(Series) },
                 Name = seriesName,
                 Limit = 1,
                 ImageTypes = new ImageType[] { ImageType.Thumb },
                 DtoOptions = new DtoOptions(false)
-
             }).FirstOrDefault();
 
             if (librarySeries != null)
@@ -271,6 +275,7 @@ namespace Emby.Server.Implementations.LiveTv
                         _logger.LogError(ex, "Error");
                     }
                 }
+
                 image = librarySeries.GetImageInfo(ImageType.Backdrop, 0);
                 if (image != null)
                 {
@@ -291,25 +296,23 @@ namespace Emby.Server.Implementations.LiveTv
 
             var program = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                IncludeItemTypes = new string[] { typeof(Series).Name },
+                IncludeItemTypes = new string[] { nameof(Series) },
                 Name = seriesName,
                 Limit = 1,
                 ImageTypes = new ImageType[] { ImageType.Primary },
                 DtoOptions = new DtoOptions(false)
-
             }).FirstOrDefault();
 
             if (program == null)
             {
                 program = _libraryManager.GetItemList(new InternalItemsQuery
                 {
-                    IncludeItemTypes = new string[] { typeof(LiveTvProgram).Name },
+                    IncludeItemTypes = new string[] { nameof(LiveTvProgram) },
                     ExternalSeriesId = programSeriesId,
                     Limit = 1,
                     ImageTypes = new ImageType[] { ImageType.Primary },
                     DtoOptions = new DtoOptions(false),
                     Name = string.IsNullOrEmpty(programSeriesId) ? seriesName : null
-
                 }).FirstOrDefault();
             }
 
@@ -394,8 +397,6 @@ namespace Emby.Server.Implementations.LiveTv
             return null;
         }
 
-        private const string InternalVersionNumber = "4";
-
         public Guid GetInternalChannelId(string serviceName, string externalId)
         {
             var name = serviceName + externalId + InternalVersionNumber;
@@ -403,7 +404,6 @@ namespace Emby.Server.Implementations.LiveTv
             return _libraryManager.GetNewItemId(name.ToLowerInvariant(), typeof(LiveTvChannel));
         }
 
-        private const string ServiceName = "Emby";
         public string GetInternalTimerId(string externalId)
         {
             var name = ServiceName + externalId + InternalVersionNumber;

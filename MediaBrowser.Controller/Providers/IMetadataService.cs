@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,8 +14,9 @@ namespace MediaBrowser.Controller.Providers
         /// Determines whether this instance can refresh the specified item.
         /// </summary>
         /// <param name="item">The item.</param>
-        /// <returns><c>true</c> if this instance can refresh the specified item; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if this instance can refresh the specified item.</returns>
         bool CanRefresh(BaseItem item);
+
         bool CanRefreshPrimary(Type type);
 
         /// <summary>

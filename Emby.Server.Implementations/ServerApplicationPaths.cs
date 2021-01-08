@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using Emby.Server.Implementations.AppBase;
 using MediaBrowser.Controller;
@@ -10,10 +9,6 @@ namespace Emby.Server.Implementations
     /// </summary>
     public class ServerApplicationPaths : BaseApplicationPaths, IServerApplicationPaths
     {
-        private string _defaultTranscodePath;
-        private string _transcodePath;
-        private string _internalMetadataPath;
-
         /// <summary>
         /// Initializes a new instance of the <see cref="ServerApplicationPaths" /> class.
         /// </summary>
@@ -23,15 +18,15 @@ namespace Emby.Server.Implementations
             string configurationDirectoryPath,
             string cacheDirectoryPath,
             string webDirectoryPath)
-            : base(programDataPath,
+            : base(
+                programDataPath,
                 logDirectoryPath,
                 configurationDirectoryPath,
                 cacheDirectoryPath,
                 webDirectoryPath)
         {
+            InternalMetadataPath = DefaultInternalMetadataPath;
         }
-
-        public string ApplicationResourcesPath { get; } = AppContext.BaseDirectory;
 
         /// <summary>
         /// Gets the path to the base root media directory.
@@ -46,17 +41,12 @@ namespace Emby.Server.Implementations
         public string DefaultUserViewsPath => Path.Combine(RootFolderPath, "default");
 
         /// <summary>
-        /// Gets the path to localization data.
-        /// </summary>
-        /// <value>The localization path.</value>
-        public string LocalizationPath => Path.Combine(ProgramDataPath, "localization");
-
-        /// <summary>
         /// Gets the path to the People directory.
         /// </summary>
         /// <value>The people path.</value>
         public string PeoplePath => Path.Combine(InternalMetadataPath, "People");
 
+        /// <inheritdoc />
         public string ArtistsPath => Path.Combine(InternalMetadataPath, "artists");
 
         /// <summary>
@@ -107,12 +97,13 @@ namespace Emby.Server.Implementations
         /// <value>The user configuration directory path.</value>
         public string UserConfigurationDirectoryPath => Path.Combine(ConfigurationDirectoryPath, "users");
 
-        public string InternalMetadataPath
-        {
-            get => _internalMetadataPath ?? (_internalMetadataPath = Path.Combine(DataPath, "metadata"));
-            set => _internalMetadataPath = value;
-        }
+        /// <inheritdoc/>
+        public string DefaultInternalMetadataPath => Path.Combine(ProgramDataPath, "metadata");
 
-        public string VirtualInternalMetadataPath { get; } = "%MetadataPath%";
+        /// <inheritdoc />
+        public string InternalMetadataPath { get; set; }
+
+        /// <inheritdoc />
+        public string VirtualInternalMetadataPath => "%MetadataPath%";
     }
 }

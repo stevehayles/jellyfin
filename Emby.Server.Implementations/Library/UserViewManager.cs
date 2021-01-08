@@ -1,8 +1,12 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using Jellyfin.Data.Entities;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -15,6 +19,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Library;
 using MediaBrowser.Model.Querying;
+using Genre = MediaBrowser.Controller.Entities.Genre;
+using Person = MediaBrowser.Controller.Entities.Person;
 
 namespace Emby.Server.Implementations.Library
 {
@@ -123,23 +129,23 @@ namespace Emby.Server.Implementations.Library
 
             if (!query.IncludeHidden)
             {
-                list = list.Where(i => !user.Configuration.MyMediaExcludes.Contains(i.Id.ToString("N", CultureInfo.InvariantCulture))).ToList();
+                list = list.Where(i => !user.GetPreferenceValues<Guid>(PreferenceKind.MyMediaExcludes).Contains(i.Id)).ToList();
             }
 
             var sorted = _libraryManager.Sort(list, user, new[] { ItemSortBy.SortName }, SortOrder.Ascending).ToList();
 
-            var orders = user.Configuration.OrderedViews.ToList();
+            var orders = user.GetPreferenceValues<Guid>(PreferenceKind.OrderedViews);
 
             return list
                 .OrderBy(i =>
                 {
-                    var index = orders.IndexOf(i.Id.ToString("N", CultureInfo.InvariantCulture));
+                    var index = Array.IndexOf(orders, i.Id);
 
                     if (index == -1
                         && i is UserView view
                         && view.DisplayParentId != Guid.Empty)
                     {
-                        index = orders.IndexOf(view.DisplayParentId.ToString("N", CultureInfo.InvariantCulture));
+                        index = Array.IndexOf(orders, view.DisplayParentId);
                     }
 
                     return index == -1 ? int.MaxValue : index;
@@ -163,7 +169,13 @@ namespace Emby.Server.Implementations.Library
             return GetUserSubViewWithName(name, parentId, type, sortName);
         }
 
-        private Folder GetUserView(List<ICollectionFolder> parents, string viewType, string localizationKey, string sortName, User user, string[] presetViews)
+        private Folder GetUserView(
+            List<ICollectionFolder> parents,
+            string viewType,
+            string localizationKey,
+            string sortName,
+            Jellyfin.Data.Entities.User user,
+            string[] presetViews)
         {
             if (parents.Count == 1 && parents.All(i => string.Equals(i.CollectionType, viewType, StringComparison.OrdinalIgnoreCase)))
             {
@@ -268,7 +280,8 @@ namespace Emby.Server.Implementations.Library
             {
                 parents = _libraryManager.GetUserRootFolder().GetChildren(user, true)
                     .Where(i => i is Folder)
-                    .Where(i => !user.Configuration.LatestItemsExcludes.Contains(i.Id.ToString("N", CultureInfo.InvariantCulture)))
+                    .Where(i => !user.GetPreferenceValues<Guid>(PreferenceKind.LatestItemExcludes)
+                        .Contains(i.Id))
                     .ToList();
             }
 
@@ -329,18 +342,17 @@ namespace Emby.Server.Implementations.Library
 
             var excludeItemTypes = includeItemTypes.Length == 0 && mediaTypes.Count == 0 ? new[]
             {
-                typeof(Person).Name,
-                typeof(Studio).Name,
-                typeof(Year).Name,
-                typeof(MusicGenre).Name,
-                typeof(Genre).Name
-
+                nameof(Person),
+                nameof(Studio),
+                nameof(Year),
+                nameof(MusicGenre),
+                nameof(Genre)
             } : Array.Empty<string>();
 
             var query = new InternalItemsQuery(user)
             {
                 IncludeItemTypes = includeItemTypes,
-                OrderBy = new[] { new ValueTuple<string, SortOrder>(ItemSortBy.DateCreated, SortOrder.Descending) },
+                OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
                 IsFolder = includeItemTypes.Length == 0 ? false : (bool?)null,
                 ExcludeItemTypes = excludeItemTypes,
                 IsVirtualItem = false,

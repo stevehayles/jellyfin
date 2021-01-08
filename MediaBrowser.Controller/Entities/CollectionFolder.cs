@@ -1,10 +1,14 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Common.Json;
 using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
@@ -18,12 +22,13 @@ namespace MediaBrowser.Controller.Entities
 {
     /// <summary>
     /// Specialized Folder class that points to a subset of the physical folders in the system.
-    /// It is created from the user-specific folders within the system root
+    /// It is created from the user-specific folders within the system root.
     /// </summary>
     public class CollectionFolder : Folder, ICollectionFolder
     {
+        private static readonly JsonSerializerOptions _jsonOptions = JsonDefaults.GetOptions();
         public static IXmlSerializer XmlSerializer { get; set; }
-        public static IJsonSerializer JsonSerializer { get; set; }
+
         public static IServerApplicationHost ApplicationHost { get; set; }
 
         public CollectionFolder()
@@ -118,7 +123,7 @@ namespace MediaBrowser.Controller.Entities
             {
                 LibraryOptions[path] = options;
 
-                var clone = JsonSerializer.DeserializeFromString<LibraryOptions>(JsonSerializer.SerializeToString(options));
+                var clone = JsonSerializer.Deserialize<LibraryOptions>(JsonSerializer.Serialize(options, _jsonOptions), _jsonOptions);
                 foreach (var mediaPath in clone.PathInfos)
                 {
                     if (!string.IsNullOrEmpty(mediaPath.Path))
@@ -140,7 +145,7 @@ namespace MediaBrowser.Controller.Entities
         }
 
         /// <summary>
-        /// Allow different display preferences for each collection folder
+        /// Allow different display preferences for each collection folder.
         /// </summary>
         /// <value>The display prefs id.</value>
         [JsonIgnore]
@@ -155,6 +160,7 @@ namespace MediaBrowser.Controller.Entities
         }
 
         public string[] PhysicalLocationsList { get; set; }
+
         public Guid[] PhysicalFolderIds { get; set; }
 
         protected override FileSystemMetadata[] GetFileSystemChildren(IDirectoryService directoryService)
@@ -222,7 +228,7 @@ namespace MediaBrowser.Controller.Entities
                 return null;
             }
 
-            return (totalProgresses / foldersWithProgress);
+            return totalProgresses / foldersWithProgress;
         }
 
         protected override bool RefreshLinkedChildren(IEnumerable<FileSystemMetadata> fileSystemChildren)

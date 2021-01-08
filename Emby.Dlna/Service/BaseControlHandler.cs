@@ -1,8 +1,10 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Xml;
 using Emby.Dlna.Didl;
 using MediaBrowser.Controller.Configuration;
@@ -13,68 +15,56 @@ namespace Emby.Dlna.Service
 {
     public abstract class BaseControlHandler
     {
-        private const string NS_SOAPENV = "http://schemas.xmlsoap.org/soap/envelope/";
-
-        protected readonly IServerConfigurationManager Config;
-        protected readonly ILogger _logger;
+        private const string NsSoapEnv = "http://schemas.xmlsoap.org/soap/envelope/";
 
         protected BaseControlHandler(IServerConfigurationManager config, ILogger logger)
         {
             Config = config;
-            _logger = logger;
+            Logger = logger;
         }
 
-        public ControlResponse ProcessControlRequest(ControlRequest request)
+        protected IServerConfigurationManager Config { get; }
+
+        protected ILogger Logger { get; }
+
+        public async Task<ControlResponse> ProcessControlRequestAsync(ControlRequest request)
         {
             try
             {
-                var enableDebugLogging = Config.GetDlnaConfiguration().EnableDebugLog;
+                LogRequest(request);
 
-                if (enableDebugLogging)
-                {
-                    LogRequest(request);
-                }
-
-                var response = ProcessControlRequestInternal(request);
-
-                if (enableDebugLogging)
-                {
-                    LogResponse(response);
-                }
-
+                var response = await ProcessControlRequestInternalAsync(request).ConfigureAwait(false);
+                LogResponse(response);
                 return response;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing control request");
+                Logger.LogError(ex, "Error processing control request");
 
-                return new ControlErrorHandler().GetResponse(ex);
+                return ControlErrorHandler.GetResponse(ex);
             }
         }
 
-        private ControlResponse ProcessControlRequestInternal(ControlRequest request)
+        private async Task<ControlResponse> ProcessControlRequestInternalAsync(ControlRequest request)
         {
             ControlRequestInfo requestInfo = null;
 
-            using (var streamReader = new StreamReader(request.InputXml))
+            using (var streamReader = new StreamReader(request.InputXml, Encoding.UTF8))
             {
                 var readerSettings = new XmlReaderSettings()
                 {
                     ValidationType = ValidationType.None,
                     CheckCharacters = false,
                     IgnoreProcessingInstructions = true,
-                    IgnoreComments = true
+                    IgnoreComments = true,
+                    Async = true
                 };
 
-                using (var reader = XmlReader.Create(streamReader, readerSettings))
-                {
-                    requestInfo = ParseRequest(reader);
-                }
+                using var reader = XmlReader.Create(streamReader, readerSettings);
+                requestInfo = await ParseRequestAsync(reader).ConfigureAwait(false);
             }
 
-            _logger.LogDebug("Received control request {0}", requestInfo.LocalName);
-
-            var result = GetResult(requestInfo.LocalName, requestInfo.Headers);
+            Logger.LogDebug("Received control request {0}", requestInfo.LocalName);
 
             var settings = new XmlWriterSettings
             {
@@ -88,17 +78,14 @@ namespace Emby.Dlna.Service
             {
                 writer.WriteStartDocument(true);
 
-                writer.WriteStartElement("SOAP-ENV", "Envelope", NS_SOAPENV);
-                writer.WriteAttributeString(string.Empty, "encodingStyle", NS_SOAPENV, "http://schemas.xmlsoap.org/soap/encoding/");
+                writer.WriteStartElement("SOAP-ENV", "Envelope", NsSoapEnv);
+                writer.WriteAttributeString(string.Empty, "encodingStyle", NsSoapEnv, "http://schemas.xmlsoap.org/soap/encoding/");
 
-                writer.WriteStartElement("SOAP-ENV", "Body", NS_SOAPENV);
+                writer.WriteStartElement("SOAP-ENV", "Body", NsSoapEnv);
                 writer.WriteStartElement("u", requestInfo.LocalName + "Response", requestInfo.NamespaceURI);
-                foreach (var i in result)
-                {
-                    writer.WriteStartElement(i.Key);
-                    writer.WriteString(i.Value);
-                    writer.WriteFullEndElement();
-                }
+
+                WriteResult(requestInfo.LocalName, requestInfo.Headers, writer);
+
                 writer.WriteFullEndElement();
                 writer.WriteFullEndElement();
 
@@ -106,7 +93,7 @@ namespace Emby.Dlna.Service
                 writer.WriteEndDocument();
             }
 
-            var xml = builder.ToString().Replace("xmlns:m=", "xmlns:u=");
+            var xml = builder.ToString().Replace("xmlns:m=", "xmlns:u=", StringComparison.Ordinal);
 
             var controlResponse = new ControlResponse
             {
@@ -114,17 +101,15 @@ namespace Emby.Dlna.Service
                 IsSuccessful = true
             };
 
-            //logger.LogDebug(xml);
-
             controlResponse.Headers.Add("EXT", string.Empty);
 
             return controlResponse;
         }
 
-        private ControlRequestInfo ParseRequest(XmlReader reader)
+        private async Task<ControlRequestInfo> ParseRequestAsync(XmlReader reader)
         {
-            reader.MoveToContent();
-            reader.Read();
+            await reader.MoveToContentAsync().ConfigureAwait(false);
+            await reader.ReadAsync().ConfigureAwait(false);
 
             // Loop through each element
             while (!reader.EOF && reader.ReadState == ReadState.Interactive)
@@ -137,74 +122,78 @@ namespace Emby.Dlna.Service
                             {
                                 if (!reader.IsEmptyElement)
                                 {
-                                    using (var subReader = reader.ReadSubtree())
-                                    {
-                                        return ParseBodyTag(subReader);
-                                    }
+                                    using var subReader = reader.ReadSubtree();
+                                    return await ParseBodyTagAsync(subReader).ConfigureAwait(false);
                                 }
                                 else
                                 {
-                                    reader.Read();
+                                    await reader.ReadAsync().ConfigureAwait(false);
                                 }
+
                                 break;
                             }
+
                         default:
                             {
-                                reader.Skip();
+                                await reader.SkipAsync().ConfigureAwait(false);
                                 break;
                             }
                     }
                 }
                 else
                 {
-                    reader.Read();
+                    await reader.ReadAsync().ConfigureAwait(false);
                 }
             }
 
-            return new ControlRequestInfo();
+            throw new EndOfStreamException("Stream ended but no body tag found.");
         }
 
-        private ControlRequestInfo ParseBodyTag(XmlReader reader)
+        private async Task<ControlRequestInfo> ParseBodyTagAsync(XmlReader reader)
         {
-            var result = new ControlRequestInfo();
+            string namespaceURI = null, localName = null;
 
-            reader.MoveToContent();
-            reader.Read();
+            await reader.MoveToContentAsync().ConfigureAwait(false);
+            await reader.ReadAsync().ConfigureAwait(false);
 
             // Loop through each element
             while (!reader.EOF && reader.ReadState == ReadState.Interactive)
             {
                 if (reader.NodeType == XmlNodeType.Element)
                 {
-                    result.LocalName = reader.LocalName;
-                    result.NamespaceURI = reader.NamespaceURI;
+                    localName = reader.LocalName;
+                    namespaceURI = reader.NamespaceURI;
 
                     if (!reader.IsEmptyElement)
                     {
-                        using (var subReader = reader.ReadSubtree())
-                        {
-                            ParseFirstBodyChild(subReader, result.Headers);
-                            return result;
-                        }
+                        var result = new ControlRequestInfo(localName, namespaceURI);
+                        using var subReader = reader.ReadSubtree();
+                        await ParseFirstBodyChildAsync(subReader, result.Headers).ConfigureAwait(false);
+                        return result;
                     }
                     else
                     {
-                        reader.Read();
+                        await reader.ReadAsync().ConfigureAwait(false);
                     }
                 }
                 else
                 {
-                    reader.Read();
+                    await reader.ReadAsync().ConfigureAwait(false);
                 }
             }
 
-            return result;
+            if (localName != null && namespaceURI != null)
+            {
+                return new ControlRequestInfo(localName, namespaceURI);
+            }
+
+            throw new EndOfStreamException("Stream ended but no control found.");
         }
 
-        private void ParseFirstBodyChild(XmlReader reader, IDictionary<string, string> headers)
+        private async Task ParseFirstBodyChildAsync(XmlReader reader, IDictionary<string, string> headers)
         {
-            reader.MoveToContent();
-            reader.Read();
+            await reader.MoveToContentAsync().ConfigureAwait(false);
+            await reader.ReadAsync().ConfigureAwait(false);
 
             // Loop through each element
             while (!reader.EOF && reader.ReadState == ReadState.Interactive)
@@ -212,23 +201,16 @@ namespace Emby.Dlna.Service
                 if (reader.NodeType == XmlNodeType.Element)
                 {
                     // TODO: Should we be doing this here, or should it be handled earlier when decoding the request?
-                    headers[reader.LocalName.RemoveDiacritics()] = reader.ReadElementContentAsString();
+                    headers[reader.LocalName.RemoveDiacritics()] = await reader.ReadElementContentAsStringAsync().ConfigureAwait(false);
                 }
                 else
                 {
-                    reader.Read();
+                    await reader.ReadAsync().ConfigureAwait(false);
                 }
             }
         }
 
-        private class ControlRequestInfo
-        {
-            public string LocalName;
-            public string NamespaceURI;
-            public IDictionary<string, string> Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        protected abstract IEnumerable<KeyValuePair<string, string>> GetResult(string methodName, IDictionary<string, string> methodParams);
+        protected abstract void WriteResult(string methodName, IDictionary<string, string> methodParams, XmlWriter xmlWriter);
 
         private void LogRequest(ControlRequest request)
         {
@@ -237,10 +219,7 @@ namespace Emby.Dlna.Service
                 return;
             }
 
-            var originalHeaders = request.Headers;
-            var headers = string.Join(", ", originalHeaders.Select(i => string.Format("{0}={1}", i.Key, i.Value)).ToArray());
-
-            _logger.LogDebug("Control request. Headers: {0}", headers);
+            Logger.LogDebug("Control request. Headers: {@Headers}", request.Headers);
         }
 
         private void LogResponse(ControlResponse response)
@@ -250,11 +229,23 @@ namespace Emby.Dlna.Service
                 return;
             }
 
-            var originalHeaders = response.Headers;
-            var headers = string.Join(", ", originalHeaders.Select(i => string.Format("{0}={1}", i.Key, i.Value)).ToArray());
-            //builder.Append(response.Xml);
+            Logger.LogDebug("Control response. Headers: {@Headers}\n{Xml}", response.Headers, response.Xml);
+        }
 
-            _logger.LogDebug("Control response. Headers: {0}", headers);
+        private class ControlRequestInfo
+        {
+            public ControlRequestInfo(string localName, string namespaceUri)
+            {
+                LocalName = localName;
+                NamespaceURI = namespaceUri;
+                Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            public string LocalName { get; set; }
+
+            public string NamespaceURI { get; set; }
+
+            public Dictionary<string, string> Headers { get; }
         }
     }
 }

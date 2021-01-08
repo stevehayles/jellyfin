@@ -53,7 +53,7 @@ namespace Emby.Server.Implementations.AppBase
             CommonApplicationPaths = applicationPaths;
             XmlSerializer = xmlSerializer;
             _fileSystem = fileSystem;
-            Logger = loggerFactory.CreateLogger(GetType().Name);
+            Logger = loggerFactory.CreateLogger<BaseConfigurationManager>();
 
             UpdateCachePath();
         }
@@ -83,7 +83,8 @@ namespace Emby.Server.Implementations.AppBase
         /// Gets the logger.
         /// </summary>
         /// <value>The logger.</value>
-        protected ILogger Logger { get; private set; }
+        protected ILogger<BaseConfigurationManager> Logger { get; private set; }
+
         /// <summary>
         /// Gets the XML serializer.
         /// </summary>
@@ -97,7 +98,7 @@ namespace Emby.Server.Implementations.AppBase
         public IApplicationPaths CommonApplicationPaths { get; private set; }
 
         /// <summary>
-        /// Gets the system configuration.
+        /// Gets or sets the system configuration.
         /// </summary>
         /// <value>The configuration.</value>
         public BaseApplicationConfiguration CommonConfiguration
@@ -123,6 +124,7 @@ namespace Emby.Server.Implementations.AppBase
                     return _configuration;
                 }
             }
+
             protected set
             {
                 _configuration = value;
@@ -131,6 +133,37 @@ namespace Emby.Server.Implementations.AppBase
             }
         }
 
+        /// <summary>
+        /// Manually pre-loads a factory so that it is available pre system initialisation.
+        /// </summary>
+        /// <typeparam name="T">Class to register.</typeparam>
+        public virtual void RegisterConfiguration<T>()
+            where T : IConfigurationFactory
+        {
+            IConfigurationFactory factory = Activator.CreateInstance<T>();
+
+            if (_configurationFactories == null)
+            {
+                _configurationFactories = new[] { factory };
+            }
+            else
+            {
+                var oldLen = _configurationFactories.Length;
+                var arr = new IConfigurationFactory[oldLen + 1];
+                _configurationFactories.CopyTo(arr, 0);
+                arr[oldLen] = factory;
+                _configurationFactories = arr;
+            }
+
+            _configurationStores = _configurationFactories
+                .SelectMany(i => i.GetConfigurations())
+                .ToArray();
+        }
+
+        /// <summary>
+        /// Adds parts.
+        /// </summary>
+        /// <param name="factories">The configuration factories.</param>
         public virtual void AddParts(IEnumerable<IConfigurationFactory> factories)
         {
             _configurationFactories = factories.ToArray();
@@ -215,7 +248,7 @@ namespace Emby.Server.Implementations.AppBase
                 cachePath = CommonConfiguration.CachePath;
             }
 
-            Logger.LogInformation("Setting cache path to " + cachePath);
+            Logger.LogInformation("Setting cache path: {Path}", cachePath);
             ((BaseApplicationPaths)CommonApplicationPaths).CachePath = cachePath;
         }
 
@@ -223,7 +256,7 @@ namespace Emby.Server.Implementations.AppBase
         /// Replaces the cache path.
         /// </summary>
         /// <param name="newConfig">The new configuration.</param>
-        /// <exception cref="DirectoryNotFoundException"></exception>
+        /// <exception cref="DirectoryNotFoundException">The new cache path doesn't exist.</exception>
         private void ValidateCachePath(BaseApplicationConfiguration newConfig)
         {
             var newPath = newConfig.CachePath;
@@ -234,7 +267,7 @@ namespace Emby.Server.Implementations.AppBase
                 // Validate
                 if (!Directory.Exists(newPath))
                 {
-                    throw new FileNotFoundException(
+                    throw new DirectoryNotFoundException(
                         string.Format(
                             CultureInfo.InvariantCulture,
                             "{0} does not exist.",
@@ -245,6 +278,10 @@ namespace Emby.Server.Implementations.AppBase
             }
         }
 
+        /// <summary>
+        /// Ensures that we have write access to the path.
+        /// </summary>
+        /// <param name="path">The path.</param>
         protected void EnsureWriteAccess(string path)
         {
             var file = Path.Combine(path, Guid.NewGuid().ToString());
@@ -257,6 +294,7 @@ namespace Emby.Server.Implementations.AppBase
             return Path.Combine(CommonApplicationPaths.ConfigurationDirectoryPath, key.ToLowerInvariant() + ".xml");
         }
 
+        /// <inheritdoc />
         public object GetConfiguration(string key)
         {
             return _configurations.GetOrAdd(key, k =>
@@ -297,12 +335,13 @@ namespace Emby.Server.Implementations.AppBase
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error loading configuration file: {path}", path);
+                Logger.LogError(ex, "Error loading configuration file: {Path}", path);
 
                 return Activator.CreateInstance(configurationType);
             }
         }
 
+        /// <inheritdoc />
         public void SaveConfiguration(string key, object configuration)
         {
             var configurationStore = GetConfigurationStore(key);
@@ -339,6 +378,11 @@ namespace Emby.Server.Implementations.AppBase
             OnNamedConfigurationUpdated(key, configuration);
         }
 
+        /// <summary>
+        /// Event handler for when a named configuration has been updated.
+        /// </summary>
+        /// <param name="key">The key of the configuration.</param>
+        /// <param name="configuration">The old configuration.</param>
         protected virtual void OnNamedConfigurationUpdated(string key, object configuration)
         {
             NamedConfigurationUpdated?.Invoke(this, new ConfigurationUpdateEventArgs
@@ -348,6 +392,7 @@ namespace Emby.Server.Implementations.AppBase
             });
         }
 
+        /// <inheritdoc />
         public Type GetConfigurationType(string key)
         {
             return GetConfigurationStore(key)

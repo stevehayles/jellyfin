@@ -1,7 +1,10 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using Jellyfin.Api.Constants;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Authentication;
 using MediaBrowser.Controller.Net;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
@@ -15,6 +18,7 @@ namespace Jellyfin.Api.Auth
     public class CustomAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
         private readonly IAuthService _authService;
+        private readonly ILogger<CustomAuthenticationHandler> _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CustomAuthenticationHandler" /> class.
@@ -32,32 +36,44 @@ namespace Jellyfin.Api.Auth
             ISystemClock clock) : base(options, logger, encoder, clock)
         {
             _authService = authService;
+            _logger = logger.CreateLogger<CustomAuthenticationHandler>();
         }
 
         /// <inheritdoc />
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            var authenticatedAttribute = new AuthenticatedAttribute();
             try
             {
-                var user = _authService.Authenticate(Request, authenticatedAttribute);
-                if (user == null)
+                var authorizationInfo = _authService.Authenticate(Request);
+                var role = UserRoles.User;
+                if (authorizationInfo.IsApiKey || authorizationInfo.User.HasPermission(PermissionKind.IsAdministrator))
                 {
-                    return Task.FromResult(AuthenticateResult.Fail("Invalid user"));
+                    role = UserRoles.Administrator;
                 }
 
                 var claims = new[]
                 {
-                    new Claim(ClaimTypes.Name, user.Name),
-                    new Claim(
-                        ClaimTypes.Role,
-                        value: user.Policy.IsAdministrator ? UserRoles.Administrator : UserRoles.User)
+                    new Claim(ClaimTypes.Name, authorizationInfo.User?.Username ?? string.Empty),
+                    new Claim(ClaimTypes.Role, role),
+                    new Claim(InternalClaimTypes.UserId, authorizationInfo.UserId.ToString("N", CultureInfo.InvariantCulture)),
+                    new Claim(InternalClaimTypes.DeviceId, authorizationInfo.DeviceId),
+                    new Claim(InternalClaimTypes.Device, authorizationInfo.Device),
+                    new Claim(InternalClaimTypes.Client, authorizationInfo.Client),
+                    new Claim(InternalClaimTypes.Version, authorizationInfo.Version),
+                    new Claim(InternalClaimTypes.Token, authorizationInfo.Token),
+                    new Claim(InternalClaimTypes.IsApiKey, authorizationInfo.IsApiKey.ToString(CultureInfo.InvariantCulture))
                 };
+
                 var identity = new ClaimsIdentity(claims, Scheme.Name);
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
                 return Task.FromResult(AuthenticateResult.Success(ticket));
+            }
+            catch (AuthenticationException ex)
+            {
+                _logger.LogDebug(ex, "Error authenticating with {Handler}", nameof(CustomAuthenticationHandler));
+                return Task.FromResult(AuthenticateResult.NoResult());
             }
             catch (SecurityException ex)
             {

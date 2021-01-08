@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -9,12 +11,12 @@ using MediaBrowser.Model.Querying;
 namespace MediaBrowser.Controller.Persistence
 {
     /// <summary>
-    /// Provides an interface to implement an Item repository
+    /// Provides an interface to implement an Item repository.
     /// </summary>
     public interface IItemRepository : IRepository
     {
         /// <summary>
-        /// Saves an item
+        /// Saves an item.
         /// </summary>
         /// <param name="item">The item.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
@@ -24,8 +26,7 @@ namespace MediaBrowser.Controller.Persistence
         /// Deletes the item.
         /// </summary>
         /// <param name="id">The identifier.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        void DeleteItem(Guid id, CancellationToken cancellationToken);
+        void DeleteItem(Guid id);
 
         /// <summary>
         /// Saves the items.
@@ -44,14 +45,14 @@ namespace MediaBrowser.Controller.Persistence
         BaseItem RetrieveItem(Guid id);
 
         /// <summary>
-        /// Gets chapters for an item
+        /// Gets chapters for an item.
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
         List<ChapterInfo> GetChapters(BaseItem id);
 
         /// <summary>
-        /// Gets a single chapter for an item
+        /// Gets a single chapter for an item.
         /// </summary>
         /// <param name="id"></param>
         /// <param name="index"></param>
@@ -61,7 +62,7 @@ namespace MediaBrowser.Controller.Persistence
         /// <summary>
         /// Saves the chapters.
         /// </summary>
-        void SaveChapters(Guid id, List<ChapterInfo> chapters);
+        void SaveChapters(Guid id, IReadOnlyList<ChapterInfo> chapters);
 
         /// <summary>
         /// Gets the media streams.
@@ -79,11 +80,27 @@ namespace MediaBrowser.Controller.Persistence
         void SaveMediaStreams(Guid id, List<MediaStream> streams, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Gets the media attachments.
+        /// </summary>
+        /// <param name="query">The query.</param>
+        /// <returns>IEnumerable{MediaAttachment}.</returns>
+        List<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query);
+
+        /// <summary>
+        /// Saves the media attachments.
+        /// </summary>
+        /// <param name="id">The identifier.</param>
+        /// <param name="attachments">The attachments.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        void SaveMediaAttachments(Guid id, IReadOnlyList<MediaAttachment> attachments, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Gets the item ids.
         /// </summary>
         /// <param name="query">The query.</param>
         /// <returns>IEnumerable&lt;Guid&gt;.</returns>
         QueryResult<Guid> GetItemIds(InternalItemsQuery query);
+
         /// <summary>
         /// Gets the items.
         /// </summary>
@@ -142,16 +159,23 @@ namespace MediaBrowser.Controller.Persistence
         int GetCount(InternalItemsQuery query);
 
         QueryResult<(BaseItem, ItemCounts)> GetGenres(InternalItemsQuery query);
+
         QueryResult<(BaseItem, ItemCounts)> GetMusicGenres(InternalItemsQuery query);
+
         QueryResult<(BaseItem, ItemCounts)> GetStudios(InternalItemsQuery query);
+
         QueryResult<(BaseItem, ItemCounts)> GetArtists(InternalItemsQuery query);
+
         QueryResult<(BaseItem, ItemCounts)> GetAlbumArtists(InternalItemsQuery query);
+
         QueryResult<(BaseItem, ItemCounts)> GetAllArtists(InternalItemsQuery query);
 
         List<string> GetMusicGenreNames();
+
         List<string> GetStudioNames();
+
         List<string> GetGenreNames();
+
         List<string> GetAllArtistNames();
     }
 }
-

@@ -1,5 +1,9 @@
+#pragma warning disable CS1591
+
+using System;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Model.Session;
 
 namespace MediaBrowser.Controller.Session
 {
@@ -20,6 +24,6 @@ namespace MediaBrowser.Controller.Session
         /// <summary>
         /// Sends the message.
         /// </summary>
-        Task SendMessage<T>(string name, string messageId, T data, ISessionController[] allControllers, CancellationToken cancellationToken);
+        Task SendMessage<T>(SessionMessageType name, Guid messageId, T data, CancellationToken cancellationToken);
     }
 }

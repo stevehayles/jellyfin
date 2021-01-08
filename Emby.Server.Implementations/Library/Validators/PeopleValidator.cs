@@ -32,6 +32,7 @@ namespace Emby.Server.Implementations.Library.Validators
         /// </summary>
         /// <param name="libraryManager">The library manager.</param>
         /// <param name="logger">The logger.</param>
+        /// <param name="fileSystem">The file system.</param>
         public PeopleValidator(ILibraryManager libraryManager, ILogger logger, IFileSystem fileSystem)
         {
             _libraryManager = libraryManager;
@@ -90,7 +91,7 @@ namespace Emby.Server.Implementations.Library.Validators
 
             var deadEntities = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                IncludeItemTypes = new[] { typeof(Person).Name },
+                IncludeItemTypes = new[] { nameof(Person) },
                 IsDeadPerson = true,
                 IsLocked = false
             });

@@ -1,14 +1,18 @@
+#pragma warning disable CS1591
+
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Events;
+using Jellyfin.Networking.Configuration;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Model.Dlna;
-using MediaBrowser.Model.Events;
 using Microsoft.Extensions.Logging;
 using Mono.Nat;
 
@@ -20,14 +24,14 @@ namespace Emby.Server.Implementations.EntryPoints
     public class ExternalPortForwarding : IServerEntryPoint
     {
         private readonly IServerApplicationHost _appHost;
-        private readonly ILogger _logger;
+        private readonly ILogger<ExternalPortForwarding> _logger;
         private readonly IServerConfigurationManager _config;
         private readonly IDeviceDiscovery _deviceDiscovery;
 
-        private readonly object _createdRulesLock = new object();
-        private List<IPEndPoint> _createdRules = new List<IPEndPoint>();
+        private readonly ConcurrentDictionary<IPEndPoint, byte> _createdRules = new ConcurrentDictionary<IPEndPoint, byte>();
+
         private Timer _timer;
-        private string _lastConfigIdentifier;
+        private string _configIdentifier;
 
         private bool _disposed = false;
 
@@ -53,21 +57,25 @@ namespace Emby.Server.Implementations.EntryPoints
         private string GetConfigIdentifier()
         {
             const char Separator = '|';
-            var config = _config.Configuration;
+            var config = _config.GetNetworkConfiguration();
 
             return new StringBuilder(32)
                 .Append(config.EnableUPnP).Append(Separator)
                 .Append(config.PublicPort).Append(Separator)
+                .Append(config.PublicHttpsPort).Append(Separator)
                 .Append(_appHost.HttpPort).Append(Separator)
                 .Append(_appHost.HttpsPort).Append(Separator)
-                .Append(_appHost.EnableHttps).Append(Separator)
+                .Append(_appHost.ListenWithHttps).Append(Separator)
                 .Append(config.EnableRemoteAccess).Append(Separator)
                 .ToString();
         }
 
         private void OnConfigurationUpdated(object sender, EventArgs e)
         {
-            if (!string.Equals(_lastConfigIdentifier, GetConfigIdentifier(), StringComparison.OrdinalIgnoreCase))
+            var oldConfigIdentifier = _configIdentifier;
+            _configIdentifier = GetConfigIdentifier();
+
+            if (!string.Equals(_configIdentifier, oldConfigIdentifier, StringComparison.OrdinalIgnoreCase))
             {
                 Stop();
                 Start();
@@ -86,26 +94,25 @@ namespace Emby.Server.Implementations.EntryPoints
 
         private void Start()
         {
-            if (!_config.Configuration.EnableUPnP || !_config.Configuration.EnableRemoteAccess)
+            var config = _config.GetNetworkConfiguration();
+            if (!config.EnableUPnP || !config.EnableRemoteAccess)
             {
                 return;
             }
 
-            _logger.LogDebug("Starting NAT discovery");
+            _logger.LogInformation("Starting NAT discovery");
 
             NatUtility.DeviceFound += OnNatUtilityDeviceFound;
             NatUtility.StartDiscovery();
 
-            _timer = new Timer(ClearCreatedRules, null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
+            _timer = new Timer((_) => _createdRules.Clear(), null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
 
             _deviceDiscovery.DeviceDiscovered += OnDeviceDiscoveryDeviceDiscovered;
-
-            _lastConfigIdentifier = GetConfigIdentifier();
         }
 
         private void Stop()
         {
-            _logger.LogDebug("Stopping NAT discovery");
+            _logger.LogInformation("Stopping NAT discovery");
 
             NatUtility.StopDiscovery();
             NatUtility.DeviceFound -= OnNatUtilityDeviceFound;
@@ -115,26 +122,16 @@ namespace Emby.Server.Implementations.EntryPoints
             _deviceDiscovery.DeviceDiscovered -= OnDeviceDiscoveryDeviceDiscovered;
         }
 
-        private void ClearCreatedRules(object state)
-        {
-            lock (_createdRulesLock)
-            {
-                _createdRules.Clear();
-            }
-        }
-
         private void OnDeviceDiscoveryDeviceDiscovered(object sender, GenericEventArgs<UpnpDeviceInfo> e)
         {
             NatUtility.Search(e.Argument.LocalIpAddress, NatProtocol.Upnp);
         }
 
-        private void OnNatUtilityDeviceFound(object sender, DeviceEventArgs e)
+        private async void OnNatUtilityDeviceFound(object sender, DeviceEventArgs e)
         {
             try
             {
-                var device = e.Device;
-
-                CreateRules(device);
+                await CreateRules(e.Device).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -142,7 +139,7 @@ namespace Emby.Server.Implementations.EntryPoints
             }
         }
 
-        private async void CreateRules(INatDevice device)
+        private Task CreateRules(INatDevice device)
         {
             if (_disposed)
             {
@@ -151,50 +148,47 @@ namespace Emby.Server.Implementations.EntryPoints
 
             // On some systems the device discovered event seems to fire repeatedly
             // This check will help ensure we're not trying to port map the same device over and over
-            var address = device.DeviceEndpoint;
-
-            lock (_createdRulesLock)
+            if (!_createdRules.TryAdd(device.DeviceEndpoint, 0))
             {
-                if (!_createdRules.Contains(address))
-                {
-                    _createdRules.Add(address);
-                }
-                else
-                {
-                    return;
-                }
+                return Task.CompletedTask;
             }
 
-            try
-            {
-                await CreatePortMap(device, _appHost.HttpPort, _config.Configuration.PublicPort).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating http port map");
-                return;
-            }
+            return Task.WhenAll(CreatePortMaps(device));
+        }
 
-            try
+        private IEnumerable<Task> CreatePortMaps(INatDevice device)
+        {
+            var config = _config.GetNetworkConfiguration();
+            yield return CreatePortMap(device, _appHost.HttpPort, config.PublicPort);
+
+            if (_appHost.ListenWithHttps)
             {
-                await CreatePortMap(device, _appHost.HttpsPort, _config.Configuration.PublicHttpsPort).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating https port map");
+                yield return CreatePortMap(device, _appHost.HttpsPort, config.PublicHttpsPort);
             }
         }
 
-        private Task<Mapping> CreatePortMap(INatDevice device, int privatePort, int publicPort)
+        private async Task CreatePortMap(INatDevice device, int privatePort, int publicPort)
         {
             _logger.LogDebug(
-                "Creating port map on local port {0} to public port {1} with device {2}",
+                "Creating port map on local port {LocalPort} to public port {PublicPort} with device {DeviceEndpoint}",
                 privatePort,
                 publicPort,
                 device.DeviceEndpoint);
 
-            return device.CreatePortMapAsync(
-                new Mapping(Protocol.Tcp, privatePort, publicPort, 0, _appHost.Name));
+            try
+            {
+                var mapping = new Mapping(Protocol.Tcp, privatePort, publicPort, 0, _appHost.Name);
+                await device.CreatePortMapAsync(mapping).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error creating port map on local port {LocalPort} to public port {PublicPort} with device {DeviceEndpoint}.",
+                    privatePort,
+                    publicPort,
+                    device.DeviceEndpoint);
+            }
         }
 
         /// <inheritdoc />

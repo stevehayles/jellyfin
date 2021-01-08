@@ -1,3 +1,6 @@
+#nullable disable
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -5,7 +8,6 @@ using System.Linq;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Extensions;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Session;
 
@@ -67,6 +69,7 @@ namespace MediaBrowser.Model.Dlna
         public Guid ItemId { get; set; }
 
         public PlayMethod PlayMethod { get; set; }
+
         public EncodingContext Context { get; set; }
 
         public DlnaProfileType MediaType { get; set; }
@@ -78,15 +81,23 @@ namespace MediaBrowser.Model.Dlna
         public long StartPositionTicks { get; set; }
 
         public int? SegmentLength { get; set; }
+
         public int? MinSegments { get; set; }
+
         public bool BreakOnNonKeyFrames { get; set; }
 
         public bool RequireAvc { get; set; }
+
         public bool RequireNonAnamorphic { get; set; }
+
         public bool CopyTimestamps { get; set; }
+
         public bool EnableMpegtsM2TsMode { get; set; }
+
         public bool EnableSubtitlesInManifest { get; set; }
+
         public string[] AudioCodecs { get; set; }
+
         public string[] VideoCodecs { get; set; }
 
         public int? AudioStreamIndex { get; set; }
@@ -94,19 +105,25 @@ namespace MediaBrowser.Model.Dlna
         public int? SubtitleStreamIndex { get; set; }
 
         public int? TranscodingMaxAudioChannels { get; set; }
+
         public int? GlobalMaxAudioChannels { get; set; }
 
         public int? AudioBitrate { get; set; }
 
+        public int? AudioSampleRate { get; set; }
+
         public int? VideoBitrate { get; set; }
 
         public int? MaxWidth { get; set; }
+
         public int? MaxHeight { get; set; }
 
         public float? MaxFramerate { get; set; }
 
         public DeviceProfile DeviceProfile { get; set; }
+
         public string DeviceProfileId { get; set; }
+
         public string DeviceId { get; set; }
 
         public long? RunTimeTicks { get; set; }
@@ -118,15 +135,18 @@ namespace MediaBrowser.Model.Dlna
         public MediaSourceInfo MediaSource { get; set; }
 
         public string[] SubtitleCodecs { get; set; }
+
         public SubtitleDeliveryMethod SubtitleDeliveryMethod { get; set; }
+
         public string SubtitleFormat { get; set; }
 
         public string PlaySessionId { get; set; }
+
         public TranscodeReason[] TranscodeReasons { get; set; }
 
         public Dictionary<string, string> StreamOptions { get; private set; }
 
-        public string MediaSourceId => MediaSource == null ? null : MediaSource.Id;
+        public string MediaSourceId => MediaSource?.Id;
 
         public bool IsDirectStream =>
             PlayMethod == PlayMethod.DirectStream ||
@@ -153,25 +173,29 @@ namespace MediaBrowser.Model.Dlna
                 }
 
                 // Try to keep the url clean by omitting defaults
-                if (StringHelper.EqualsIgnoreCase(pair.Name, "StartTimeTicks") &&
-                    StringHelper.EqualsIgnoreCase(pair.Value, "0"))
+                if (string.Equals(pair.Name, "StartTimeTicks", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(pair.Value, "0", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
-                if (StringHelper.EqualsIgnoreCase(pair.Name, "SubtitleStreamIndex") &&
-                    StringHelper.EqualsIgnoreCase(pair.Value, "-1"))
+
+                if (string.Equals(pair.Name, "SubtitleStreamIndex", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(pair.Value, "-1", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
-                if (StringHelper.EqualsIgnoreCase(pair.Name, "Static") &&
-                    StringHelper.EqualsIgnoreCase(pair.Value, "false"))
+
+                // Be careful, IsDirectStream==true by default (Static != false or not in query).
+                // See initialization of StreamingRequestDto in AudioController.GetAudioStream() method : Static = @static ?? true.
+                if (string.Equals(pair.Name, "Static", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(pair.Value, "true", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
                 var encodedValue = pair.Value.Replace(" ", "%20");
 
-                list.Add(string.Format("{0}={1}", pair.Name, encodedValue));
+                list.Add(string.Format(CultureInfo.InvariantCulture, "{0}={1}", pair.Name, encodedValue));
             }
 
             string queryString = string.Join("&", list.ToArray());
@@ -192,20 +216,20 @@ namespace MediaBrowser.Model.Dlna
 
             if (MediaType == DlnaProfileType.Audio)
             {
-                if (StringHelper.EqualsIgnoreCase(SubProtocol, "hls"))
+                if (string.Equals(SubProtocol, "hls", StringComparison.OrdinalIgnoreCase))
                 {
-                    return string.Format("{0}/audio/{1}/master.m3u8?{2}", baseUrl, ItemId, queryString);
+                    return string.Format(CultureInfo.InvariantCulture, "{0}/audio/{1}/master.m3u8?{2}", baseUrl, ItemId, queryString);
                 }
 
-                return string.Format("{0}/audio/{1}/stream{2}?{3}", baseUrl, ItemId, extension, queryString);
+                return string.Format(CultureInfo.InvariantCulture, "{0}/audio/{1}/stream{2}?{3}", baseUrl, ItemId, extension, queryString);
             }
 
-            if (StringHelper.EqualsIgnoreCase(SubProtocol, "hls"))
+            if (string.Equals(SubProtocol, "hls", StringComparison.OrdinalIgnoreCase))
             {
-                return string.Format("{0}/videos/{1}/master.m3u8?{2}", baseUrl, ItemId, queryString);
+                return string.Format(CultureInfo.InvariantCulture, "{0}/videos/{1}/master.m3u8?{2}", baseUrl, ItemId, queryString);
             }
 
-            return string.Format("{0}/videos/{1}/stream{2}?{3}", baseUrl, ItemId, extension, queryString);
+            return string.Format(CultureInfo.InvariantCulture, "{0}/videos/{1}/stream{2}?{3}", baseUrl, ItemId, extension, queryString);
         }
 
         private static List<NameValuePair> BuildParams(StreamInfo item, string accessToken)
@@ -230,6 +254,7 @@ namespace MediaBrowser.Model.Dlna
             list.Add(new NameValuePair("SubtitleStreamIndex", item.SubtitleStreamIndex.HasValue && item.SubtitleDeliveryMethod != SubtitleDeliveryMethod.External ? item.SubtitleStreamIndex.Value.ToString(CultureInfo.InvariantCulture) : string.Empty));
             list.Add(new NameValuePair("VideoBitrate", item.VideoBitrate.HasValue ? item.VideoBitrate.Value.ToString(CultureInfo.InvariantCulture) : string.Empty));
             list.Add(new NameValuePair("AudioBitrate", item.AudioBitrate.HasValue ? item.AudioBitrate.Value.ToString(CultureInfo.InvariantCulture) : string.Empty));
+            list.Add(new NameValuePair("AudioSampleRate", item.AudioSampleRate.HasValue ? item.AudioSampleRate.Value.ToString(CultureInfo.InvariantCulture) : string.Empty));
 
             list.Add(new NameValuePair("MaxFramerate", item.MaxFramerate.HasValue ? item.MaxFramerate.Value.ToString(CultureInfo.InvariantCulture) : string.Empty));
             list.Add(new NameValuePair("MaxWidth", item.MaxWidth.HasValue ? item.MaxWidth.Value.ToString(CultureInfo.InvariantCulture) : string.Empty));
@@ -237,7 +262,7 @@ namespace MediaBrowser.Model.Dlna
 
             long startPositionTicks = item.StartPositionTicks;
 
-            var isHls = StringHelper.EqualsIgnoreCase(item.SubProtocol, "hls");
+            var isHls = string.Equals(item.SubProtocol, "hls", StringComparison.OrdinalIgnoreCase);
 
             if (isHls)
             {
@@ -255,7 +280,6 @@ namespace MediaBrowser.Model.Dlna
             list.Add(new NameValuePair("LiveStreamId", liveStreamId ?? string.Empty));
 
             list.Add(new NameValuePair("SubtitleMethod", item.SubtitleStreamIndex.HasValue && item.SubtitleDeliveryMethod != SubtitleDeliveryMethod.External ? item.SubtitleDeliveryMethod.ToString() : string.Empty));
-
 
             if (!item.IsDirectStream)
             {
@@ -370,7 +394,7 @@ namespace MediaBrowser.Model.Dlna
             var list = new List<SubtitleStreamInfo>();
 
             // HLS will preserve timestamps so we can just grab the full subtitle stream
-            long startPositionTicks = StringHelper.EqualsIgnoreCase(SubProtocol, "hls")
+            long startPositionTicks = string.Equals(SubProtocol, "hls", StringComparison.OrdinalIgnoreCase)
                 ? 0
                 : (PlayMethod == PlayMethod.Transcode && !CopyTimestamps ? StartPositionTicks : 0);
 
@@ -435,9 +459,9 @@ namespace MediaBrowser.Model.Dlna
 
             if (info.DeliveryMethod == SubtitleDeliveryMethod.External)
             {
-                if (MediaSource.Protocol == MediaProtocol.File || !StringHelper.EqualsIgnoreCase(stream.Codec, subtitleProfile.Format) || !stream.IsExternal)
+                if (MediaSource.Protocol == MediaProtocol.File || !string.Equals(stream.Codec, subtitleProfile.Format, StringComparison.OrdinalIgnoreCase) || !stream.IsExternal)
                 {
-                    info.Url = string.Format("{0}/Videos/{1}/{2}/Subtitles/{3}/{4}/Stream.{5}",
+                    info.Url = string.Format(CultureInfo.InvariantCulture, "{0}/Videos/{1}/{2}/Subtitles/{3}/{4}/Stream.{5}",
                         baseUrl,
                         ItemId,
                         MediaSourceId,
@@ -463,7 +487,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Returns the audio stream that will be used
+        /// Returns the audio stream that will be used.
         /// </summary>
         public MediaStream TargetAudioStream
         {
@@ -479,7 +503,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Returns the video stream that will be used
+        /// Returns the video stream that will be used.
         /// </summary>
         public MediaStream TargetVideoStream
         {
@@ -495,19 +519,21 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public int? TargetAudioSampleRate
         {
             get
             {
                 var stream = TargetAudioStream;
-                return stream == null ? null : stream.SampleRate;
+                return AudioSampleRate.HasValue && !IsDirectStream
+                    ? AudioSampleRate
+                    : stream == null ? null : stream.SampleRate;
             }
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public int? TargetAudioBitDepth
         {
@@ -530,7 +556,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public int? TargetVideoBitDepth
         {
@@ -577,7 +603,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public float? TargetFramerate
         {
@@ -591,7 +617,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public double? TargetVideoLevel
         {
@@ -678,7 +704,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public int? TargetPacketLength
         {
@@ -692,7 +718,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio sample rate that will be in the output stream
+        /// Predicts the audio sample rate that will be in the output stream.
         /// </summary>
         public string TargetVideoProfile
         {
@@ -730,7 +756,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio bitrate that will be in the output stream
+        /// Predicts the audio bitrate that will be in the output stream.
         /// </summary>
         public int? TargetAudioBitrate
         {
@@ -744,7 +770,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio channels that will be in the output stream
+        /// Predicts the audio channels that will be in the output stream.
         /// </summary>
         public int? TargetAudioChannels
         {
@@ -768,7 +794,7 @@ namespace MediaBrowser.Model.Dlna
 
         public int? GetTargetAudioChannels(string codec)
         {
-            var defaultValue = GlobalMaxAudioChannels;
+            var defaultValue = GlobalMaxAudioChannels ?? TranscodingMaxAudioChannels;
 
             var value = GetOption(codec, "audiochannels");
             if (string.IsNullOrEmpty(value))
@@ -785,7 +811,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio codec that will be in the output stream
+        /// Predicts the audio codec that will be in the output stream.
         /// </summary>
         public string[] TargetAudioCodec
         {
@@ -793,18 +819,18 @@ namespace MediaBrowser.Model.Dlna
             {
                 var stream = TargetAudioStream;
 
-                string inputCodec = stream == null ? null : stream.Codec;
+                string inputCodec = stream?.Codec;
 
                 if (IsDirectStream)
                 {
-                    return string.IsNullOrEmpty(inputCodec) ? new string[] { } : new[] { inputCodec };
+                    return string.IsNullOrEmpty(inputCodec) ? Array.Empty<string>() : new[] { inputCodec };
                 }
 
                 foreach (string codec in AudioCodecs)
                 {
-                    if (StringHelper.EqualsIgnoreCase(codec, inputCodec))
+                    if (string.Equals(codec, inputCodec, StringComparison.OrdinalIgnoreCase))
                     {
-                        return string.IsNullOrEmpty(codec) ? new string[] { } : new[] { codec };
+                        return string.IsNullOrEmpty(codec) ? Array.Empty<string>() : new[] { codec };
                     }
                 }
 
@@ -818,18 +844,18 @@ namespace MediaBrowser.Model.Dlna
             {
                 var stream = TargetVideoStream;
 
-                string inputCodec = stream == null ? null : stream.Codec;
+                string inputCodec = stream?.Codec;
 
                 if (IsDirectStream)
                 {
-                    return string.IsNullOrEmpty(inputCodec) ? new string[] { } : new[] { inputCodec };
+                    return string.IsNullOrEmpty(inputCodec) ? Array.Empty<string>() : new[] { inputCodec };
                 }
 
                 foreach (string codec in VideoCodecs)
                 {
-                    if (StringHelper.EqualsIgnoreCase(codec, inputCodec))
+                    if (string.Equals(codec, inputCodec, StringComparison.OrdinalIgnoreCase))
                     {
-                        return string.IsNullOrEmpty(codec) ? new string[] { } : new[] { codec };
+                        return string.IsNullOrEmpty(codec) ? Array.Empty<string>() : new[] { codec };
                     }
                 }
 
@@ -838,7 +864,7 @@ namespace MediaBrowser.Model.Dlna
         }
 
         /// <summary>
-        /// Predicts the audio channels that will be in the output stream
+        /// Predicts the audio channels that will be in the output stream.
         /// </summary>
         public long? TargetSize
         {
@@ -884,7 +910,7 @@ namespace MediaBrowser.Model.Dlna
         {
             get
             {
-                var defaultValue = StringHelper.EqualsIgnoreCase(Container, "m2ts")
+                var defaultValue = string.Equals(Container, "m2ts", StringComparison.OrdinalIgnoreCase)
                     ? TransportStreamTimestamp.Valid
                     : TransportStreamTimestamp.None;
 
@@ -991,6 +1017,7 @@ namespace MediaBrowser.Model.Dlna
                 {
                     return GetMediaStreamCount(MediaStreamType.Video, int.MaxValue);
                 }
+
                 return GetMediaStreamCount(MediaStreamType.Video, 1);
             }
         }
@@ -1003,6 +1030,7 @@ namespace MediaBrowser.Model.Dlna
                 {
                     return GetMediaStreamCount(MediaStreamType.Audio, int.MaxValue);
                 }
+
                 return GetMediaStreamCount(MediaStreamType.Audio, 1);
             }
         }

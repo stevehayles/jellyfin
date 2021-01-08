@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -5,8 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.LiveTv;
@@ -56,12 +58,15 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
         protected virtual int EmptyReadLimit => 1000;
 
         public MediaSourceInfo OriginalMediaSource { get; set; }
+
         public MediaSourceInfo MediaSource { get; set; }
 
         public int ConsumerCount { get; set; }
 
         public string OriginalStreamId { get; set; }
+
         public bool EnableStreamSharing { get; set; }
+
         public string UniqueId { get; }
 
         public string TunerHostId { get; }
@@ -96,7 +101,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.ReadWrite,
-                StreamDefaults.DefaultFileStreamBufferSize,
+                IODefaults.FileStreamBufferSize,
                 allowAsyncFileRead ? FileOptions.SequentialScan | FileOptions.Asynchronous : FileOptions.SequentialScan);
 
         public Task DeleteTempFiles()
@@ -177,7 +182,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
 
             if (string.IsNullOrEmpty(currentFile))
             {
-                return (files.Last(), true);
+                return (files[^1], true);
             }
 
             var nextIndex = files.FindIndex(i => string.Equals(i, currentFile, StringComparison.OrdinalIgnoreCase)) + 1;
@@ -199,7 +204,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
                 await StreamHelper.CopyToAsync(
                     inputStream,
                     stream,
-                    StreamDefaults.DefaultCopyToBufferSize,
+                    IODefaults.CopyToBufferSize,
                     emptyReadLimit,
                     cancellationToken).ConfigureAwait(false);
             }
@@ -218,11 +223,9 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
             }
             catch (IOException)
             {
-
             }
             catch (ArgumentException)
             {
-
             }
             catch (Exception ex)
             {

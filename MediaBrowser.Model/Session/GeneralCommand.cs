@@ -1,3 +1,6 @@
+#nullable disable
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 
@@ -5,7 +8,7 @@ namespace MediaBrowser.Model.Session
 {
     public class GeneralCommand
     {
-        public string Name { get; set; }
+        public GeneralCommandType Name { get; set; }
 
         public Guid ControllingUserId { get; set; }
 

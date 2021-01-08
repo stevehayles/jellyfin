@@ -1,8 +1,8 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using MediaBrowser.Model.Serialization;
 using SQLitePCL.pretty;
 
 namespace Emby.Server.Implementations.Data
@@ -105,39 +105,6 @@ namespace Emby.Server.Implementations.Data
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Serializes to bytes.
-        /// </summary>
-        /// <returns>System.Byte[][].</returns>
-        /// <exception cref="ArgumentNullException">obj</exception>
-        public static byte[] SerializeToBytes(this IJsonSerializer json, object obj)
-        {
-            if (obj == null)
-            {
-                throw new ArgumentNullException(nameof(obj));
-            }
-
-            using (var stream = new MemoryStream())
-            {
-                json.SerializeToStream(obj, stream);
-                return stream.ToArray();
-            }
-        }
-
-        public static void Attach(SQLiteDatabaseConnection db, string path, string alias)
-        {
-            var commandText = string.Format(
-                CultureInfo.InvariantCulture,
-                "attach @path as {0};",
-                alias);
-
-            using (var statement = db.PrepareStatement(commandText))
-            {
-                statement.TryBind("@path", path);
-                statement.MoveNext();
-            }
         }
 
         public static bool IsDBNull(this IReadOnlyList<IResultSetValue> result, int index)
@@ -253,7 +220,9 @@ namespace Emby.Server.Implementations.Data
         {
             if (statement.BindParameters.TryGetValue(name, out IBindParameter bindParam))
             {
-                bindParam.Bind(value.ToByteArray());
+                Span<byte> byteValue = stackalloc byte[16];
+                value.TryWriteBytes(byteValue);
+                bindParam.Bind(byteValue);
             }
             else
             {
@@ -285,7 +254,7 @@ namespace Emby.Server.Implementations.Data
             }
         }
 
-        public static void TryBind(this IStatement statement, string name, byte[] value)
+        public static void TryBind(this IStatement statement, string name, ReadOnlySpan<byte> value)
         {
             if (statement.BindParameters.TryGetValue(name, out IBindParameter bindParam))
             {
@@ -381,11 +350,11 @@ namespace Emby.Server.Implementations.Data
             }
         }
 
-        public static IEnumerable<IReadOnlyList<IResultSetValue>> ExecuteQuery(this IStatement This)
+        public static IEnumerable<IReadOnlyList<IResultSetValue>> ExecuteQuery(this IStatement statement)
         {
-            while (This.MoveNext())
+            while (statement.MoveNext())
             {
-                yield return This.Current;
+                yield return statement.Current;
             }
         }
     }

@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 
@@ -10,6 +12,7 @@ namespace MediaBrowser.Controller.Providers
         public int? IndexNumberEnd { get; set; }
 
         public bool IsMissingEpisode { get; set; }
+
         public string SeriesDisplayOrder { get; set; }
 
         public EpisodeInfo()

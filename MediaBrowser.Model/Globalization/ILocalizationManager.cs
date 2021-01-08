@@ -1,3 +1,4 @@
+#nullable disable
 using System.Collections.Generic;
 using System.Globalization;
 using MediaBrowser.Model.Entities;
@@ -5,7 +6,7 @@ using MediaBrowser.Model.Entities;
 namespace MediaBrowser.Model.Globalization
 {
     /// <summary>
-    /// Interface ILocalizationManager
+    /// Interface ILocalizationManager.
     /// </summary>
     public interface ILocalizationManager
     {
