@@ -1,5 +1,6 @@
+#pragma warning disable CS1591
+
 using System;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using MediaBrowser.Model.Net;
@@ -8,32 +9,6 @@ namespace Emby.Server.Implementations.Net
 {
     public class SocketFactory : ISocketFactory
     {
-        /// <summary>
-        /// Creates a new UDP acceptSocket and binds it to the specified local port.
-        /// </summary>
-        /// <param name="localPort">An integer specifying the local port to bind the acceptSocket to.</param>
-        public ISocket CreateUdpSocket(int localPort)
-        {
-            if (localPort < 0)
-            {
-                throw new ArgumentException("localPort cannot be less than zero.", nameof(localPort));
-            }
-
-            var retVal = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-
-            try
-            {
-                retVal.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                return new UdpSocket(retVal, localPort, IPAddress.Any);
-            }
-            catch
-            {
-                retVal?.Dispose();
-
-                throw;
-            }
-        }
-
         public ISocket CreateUdpBroadcastSocket(int localPort)
         {
             if (localPort < 0)
@@ -44,6 +19,7 @@ namespace Emby.Server.Implementations.Net
             var retVal = new Socket(AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, System.Net.Sockets.ProtocolType.Udp);
             try
             {
+                retVal.EnableBroadcast = true;
                 retVal.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 retVal.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, 1);
 
@@ -71,6 +47,7 @@ namespace Emby.Server.Implementations.Net
             var retVal = new Socket(AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, System.Net.Sockets.ProtocolType.Udp);
             try
             {
+                retVal.EnableBroadcast = true;
                 retVal.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 retVal.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 4);
 
@@ -123,7 +100,6 @@ namespace Emby.Server.Implementations.Net
             }
             catch (SocketException)
             {
-
             }
 
             try
@@ -134,12 +110,12 @@ namespace Emby.Server.Implementations.Net
             }
             catch (SocketException)
             {
-
             }
 
             try
             {
-                //retVal.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
+                retVal.EnableBroadcast = true;
+                // retVal.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
                 retVal.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, multicastTimeToLive);
 
                 var localIp = IPAddress.Any;
@@ -156,8 +132,5 @@ namespace Emby.Server.Implementations.Net
                 throw;
             }
         }
-
-        public Stream CreateNetworkStream(ISocket socket, bool ownsSocket)
-            => new NetworkStream(((UdpSocket)socket).Socket, ownsSocket);
     }
 }

@@ -1,7 +1,10 @@
+#nullable disable
+using System;
+
 namespace MediaBrowser.Model.Tasks
 {
     /// <summary>
-    /// Class TaskInfo
+    /// Class TaskInfo.
     /// </summary>
     public class TaskInfo
     {
@@ -70,7 +73,7 @@ namespace MediaBrowser.Model.Tasks
         /// </summary>
         public TaskInfo()
         {
-            Triggers = new TaskTriggerInfo[] { };
+            Triggers = Array.Empty<TaskTriggerInfo>();
         }
     }
 }

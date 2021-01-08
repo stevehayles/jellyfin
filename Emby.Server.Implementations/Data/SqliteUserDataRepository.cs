@@ -1,8 +1,10 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
+using Jellyfin.Data.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -15,23 +17,19 @@ namespace Emby.Server.Implementations.Data
     public class SqliteUserDataRepository : BaseSqliteRepository, IUserDataRepository
     {
         public SqliteUserDataRepository(
-            ILoggerFactory loggerFactory,
+            ILogger<SqliteUserDataRepository> logger,
             IApplicationPaths appPaths)
-            : base(loggerFactory.CreateLogger(nameof(SqliteUserDataRepository)))
+            : base(logger)
         {
             DbFilePath = Path.Combine(appPaths.DataPath, "library.db");
         }
 
-        /// <summary>
-        /// Gets the name of the repository
-        /// </summary>
-        /// <value>The name.</value>
+        /// <inheritdoc />
         public string Name => "SQLite";
 
         /// <summary>
-        /// Opens the connection to the database
+        /// Opens the connection to the database.
         /// </summary>
-        /// <returns>Task.</returns>
         public void Initialize(IUserManager userManager, SemaphoreSlim dbLock, SQLiteDatabaseConnection dbConnection)
         {
             WriteLock.Dispose();
@@ -46,7 +44,8 @@ namespace Emby.Server.Implementations.Data
 
                 var users = userDatasTableExists ? null : userManager.Users;
 
-                connection.RunInTransaction(db =>
+                connection.RunInTransaction(
+                db =>
                 {
                     db.ExecuteAll(string.Join(";", new[] {
 
@@ -97,7 +96,7 @@ namespace Emby.Server.Implementations.Data
                         continue;
                     }
 
-                    statement.TryBind("@UserId", user.Id.ToGuidBlob());
+                    statement.TryBind("@UserId", user.Id.ToByteArray());
                     statement.TryBind("@InternalUserId", user.InternalId);
 
                     statement.MoveNext();
@@ -137,10 +136,12 @@ namespace Emby.Server.Implementations.Data
             {
                 throw new ArgumentNullException(nameof(userData));
             }
+
             if (internalUserId <= 0)
             {
                 throw new ArgumentNullException(nameof(internalUserId));
             }
+
             if (string.IsNullOrEmpty(key))
             {
                 throw new ArgumentNullException(nameof(key));
@@ -155,6 +156,7 @@ namespace Emby.Server.Implementations.Data
             {
                 throw new ArgumentNullException(nameof(userData));
             }
+
             if (internalUserId <= 0)
             {
                 throw new ArgumentNullException(nameof(internalUserId));
@@ -177,7 +179,8 @@ namespace Emby.Server.Implementations.Data
 
             using (var connection = GetConnection())
             {
-                connection.RunInTransaction(db =>
+                connection.RunInTransaction(
+                db =>
                 {
                     SaveUserData(db, internalUserId, key, userData);
                 }, TransactionMode);
@@ -237,7 +240,7 @@ namespace Emby.Server.Implementations.Data
         }
 
         /// <summary>
-        /// Persist all user data for the specified user
+        /// Persist all user data for the specified user.
         /// </summary>
         private void PersistAllUserData(long internalUserId, UserItemData[] userDataList, CancellationToken cancellationToken)
         {
@@ -245,7 +248,8 @@ namespace Emby.Server.Implementations.Data
 
             using (var connection = GetConnection())
             {
-                connection.RunInTransaction(db =>
+                connection.RunInTransaction(
+                db =>
                 {
                     foreach (var userItemData in userDataList)
                     {
@@ -311,7 +315,7 @@ namespace Emby.Server.Implementations.Data
         }
 
         /// <summary>
-        /// Return all user-data associated with the given user
+        /// Return all user-data associated with the given user.
         /// </summary>
         /// <param name="internalUserId"></param>
         /// <returns></returns>
@@ -341,7 +345,7 @@ namespace Emby.Server.Implementations.Data
         }
 
         /// <summary>
-        /// Read a row from the specified reader into the provided userData object
+        /// Read a row from the specified reader into the provided userData object.
         /// </summary>
         /// <param name="reader"></param>
         private UserItemData ReadRow(IReadOnlyList<IResultSetValue> reader)
@@ -349,7 +353,7 @@ namespace Emby.Server.Implementations.Data
             var userData = new UserItemData();
 
             userData.Key = reader[0].ToString();
-            //userData.UserId = reader[1].ReadGuidFromBlob();
+            // userData.UserId = reader[1].ReadGuidFromBlob();
 
             if (reader[2].SQLiteType != SQLiteType.Null)
             {
@@ -377,6 +381,16 @@ namespace Emby.Server.Implementations.Data
             }
 
             return userData;
+        }
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// There is nothing to dispose here since <see cref="BaseSqliteRepository.WriteLock"/> and
+        /// <see cref="BaseSqliteRepository.WriteConnection"/> are managed by <see cref="SqliteItemRepository"/>.
+        /// See <see cref="Initialize(IUserManager, SemaphoreSlim, SQLiteDatabaseConnection)"/>.
+        /// </remarks>
+        protected override void Dispose(bool dispose)
+        {
         }
     }
 }

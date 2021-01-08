@@ -1,9 +1,10 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using MediaBrowser.Controller.Extensions;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace MediaBrowser.Controller.Entities
@@ -20,6 +21,7 @@ namespace MediaBrowser.Controller.Entities
             list.Insert(0, GetType().Name + "-" + (Name ?? string.Empty).RemoveDiacritics());
             return list;
         }
+
         public override string CreatePresentationUniqueKey()
         {
             return GetUserDataKeys()[0];
@@ -47,7 +49,7 @@ namespace MediaBrowser.Controller.Entities
 
         /// <summary>
         /// Returns the folder containing the item.
-        /// If the item is a folder, it returns the folder itself
+        /// If the item is a folder, it returns the folder itself.
         /// </summary>
         /// <value>The containing folder path.</value>
         [JsonIgnore]
@@ -115,11 +117,12 @@ namespace MediaBrowser.Controller.Entities
                 Logger.LogDebug("{0} path has changed from {1} to {2}", GetType().Name, Path, newPath);
                 return true;
             }
+
             return base.RequiresRefresh();
         }
 
         /// <summary>
-        /// This is called before any metadata refresh and returns true or false indicating if changes were made
+        /// This is called before any metadata refresh and returns true or false indicating if changes were made.
         /// </summary>
         public override bool BeforeMetadataRefresh(bool replaceAllMetdata)
         {
@@ -133,59 +136,6 @@ namespace MediaBrowser.Controller.Entities
             }
 
             return hasChanges;
-        }
-    }
-
-    /// <summary>
-    /// This is the small Person stub that is attached to BaseItems
-    /// </summary>
-    public class PersonInfo : IHasProviderIds
-    {
-        public PersonInfo()
-        {
-            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        public Guid ItemId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the name.
-        /// </summary>
-        /// <value>The name.</value>
-        public string Name { get; set; }
-        /// <summary>
-        /// Gets or sets the role.
-        /// </summary>
-        /// <value>The role.</value>
-        public string Role { get; set; }
-        /// <summary>
-        /// Gets or sets the type.
-        /// </summary>
-        /// <value>The type.</value>
-        public string Type { get; set; }
-
-        /// <summary>
-        /// Gets or sets the sort order - ascending
-        /// </summary>
-        /// <value>The sort order.</value>
-        public int? SortOrder { get; set; }
-
-        public string ImageUrl { get; set; }
-
-        public Dictionary<string, string> ProviderIds { get; set; }
-
-        /// <summary>
-        /// Returns a <see cref="string" /> that represents this instance.
-        /// </summary>
-        /// <returns>A <see cref="string" /> that represents this instance.</returns>
-        public override string ToString()
-        {
-            return Name;
-        }
-
-        public bool IsType(string type)
-        {
-            return string.Equals(Type, type, StringComparison.OrdinalIgnoreCase) || string.Equals(Role, type, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

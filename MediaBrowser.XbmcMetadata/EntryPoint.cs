@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Configuration;
@@ -12,16 +14,16 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaBrowser.XbmcMetadata
 {
-    public class EntryPoint : IServerEntryPoint
+    public sealed class EntryPoint : IServerEntryPoint
     {
         private readonly IUserDataManager _userDataManager;
-        private readonly ILogger _logger;
+        private readonly ILogger<EntryPoint> _logger;
         private readonly IProviderManager _providerManager;
         private readonly IConfigurationManager _config;
 
         public EntryPoint(
             IUserDataManager userDataManager,
-            ILogger logger,
+            ILogger<EntryPoint> logger,
             IProviderManager providerManager,
             IConfigurationManager config)
         {
@@ -39,7 +41,7 @@ namespace MediaBrowser.XbmcMetadata
             return Task.CompletedTask;
         }
 
-        private void OnUserDataSaved(object sender, UserDataSaveEventArgs e)
+        private void OnUserDataSaved(object? sender, UserDataSaveEventArgs e)
         {
             if (e.SaveReason == UserDataSaveReason.PlaybackFinished || e.SaveReason == UserDataSaveReason.TogglePlayed || e.SaveReason == UserDataSaveReason.UpdateUserRating)
             {

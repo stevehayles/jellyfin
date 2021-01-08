@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System.Text.Json.Serialization;
 using MediaBrowser.Model.Drawing;
 
@@ -14,7 +16,6 @@ namespace MediaBrowser.Controller.Entities
         [JsonIgnore]
         public override Folder LatestItemsIndexContainer => AlbumEntity;
 
-
         [JsonIgnore]
         public PhotoAlbum AlbumEntity
         {
@@ -29,6 +30,7 @@ namespace MediaBrowser.Controller.Entities
                         return photoAlbum;
                     }
                 }
+
                 return null;
             }
         }
@@ -41,10 +43,10 @@ namespace MediaBrowser.Controller.Entities
         public override double GetDefaultPrimaryImageAspectRatio()
         {
             // REVIEW: @bond
-            if (Width.HasValue && Height.HasValue)
+            if (Width != 0 && Height != 0)
             {
-                double width = Width.Value;
-                double height = Height.Value;
+                double width = Width;
+                double height = Height;
 
                 if (Orientation.HasValue)
                 {
@@ -67,20 +69,28 @@ namespace MediaBrowser.Controller.Entities
             return base.GetDefaultPrimaryImageAspectRatio();
         }
 
-        public new int? Width { get; set; }
-        public new int? Height { get; set; }
         public string CameraMake { get; set; }
+
         public string CameraModel { get; set; }
+
         public string Software { get; set; }
+
         public double? ExposureTime { get; set; }
+
         public double? FocalLength { get; set; }
+
         public ImageOrientation? Orientation { get; set; }
+
         public double? Aperture { get; set; }
+
         public double? ShutterSpeed { get; set; }
 
         public double? Latitude { get; set; }
+
         public double? Longitude { get; set; }
+
         public double? Altitude { get; set; }
+
         public int? IsoSpeedRating { get; set; }
     }
 }

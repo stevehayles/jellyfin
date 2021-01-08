@@ -1,13 +1,15 @@
+using System;
+using MediaBrowser.Common;
 using MediaBrowser.Common.Cryptography;
 using Xunit;
-using static MediaBrowser.Common.HexHelper;
 
 namespace Jellyfin.Common.Tests
 {
     public class PasswordHashTests
     {
         [Theory]
-        [InlineData("$PBKDF2$iterations=1000$62FBA410AFCA5B4475F35137AB2E8596B127E4D927BA23F6CC05C067E897042D",
+        [InlineData(
+            "$PBKDF2$iterations=1000$62FBA410AFCA5B4475F35137AB2E8596B127E4D927BA23F6CC05C067E897042D",
             "PBKDF2",
             "",
             "62FBA410AFCA5B4475F35137AB2E8596B127E4D927BA23F6CC05C067E897042D")]
@@ -15,8 +17,8 @@ namespace Jellyfin.Common.Tests
         {
             var pass = PasswordHash.Parse(passwordHash);
             Assert.Equal(id, pass.Id);
-            Assert.Equal(salt, ToHexString(pass.Salt));
-            Assert.Equal(hash, ToHexString(pass.Hash));
+            Assert.Equal(salt, Convert.ToHexString(pass.Salt));
+            Assert.Equal(hash, Convert.ToHexString(pass.Hash));
         }
 
         [Theory]

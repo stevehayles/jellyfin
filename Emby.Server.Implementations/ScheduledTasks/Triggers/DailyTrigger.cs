@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Threading;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
@@ -7,12 +6,17 @@ using Microsoft.Extensions.Logging;
 namespace Emby.Server.Implementations.ScheduledTasks
 {
     /// <summary>
-    /// Represents a task trigger that fires everyday
+    /// Represents a task trigger that fires everyday.
     /// </summary>
     public class DailyTrigger : ITaskTrigger
     {
         /// <summary>
-        /// Get the time of day to trigger the task to run
+        /// Occurs when [triggered].
+        /// </summary>
+        public event EventHandler<EventArgs> Triggered;
+
+        /// <summary>
+        /// Gets or sets the time of day to trigger the task to run.
         /// </summary>
         /// <value>The time of day.</value>
         public TimeSpan TimeOfDay { get; set; }
@@ -29,9 +33,11 @@ namespace Emby.Server.Implementations.ScheduledTasks
         private Timer Timer { get; set; }
 
         /// <summary>
-        /// Stars waiting for the trigger action
+        /// Stars waiting for the trigger action.
         /// </summary>
         /// <param name="lastResult">The last result.</param>
+        /// <param name="logger">The logger.</param>
+        /// <param name="taskName">The name of the task.</param>
         /// <param name="isApplicationStartup">if set to <c>true</c> [is application startup].</param>
         public void Start(TaskResult lastResult, ILogger logger, string taskName, bool isApplicationStartup)
         {
@@ -50,7 +56,7 @@ namespace Emby.Server.Implementations.ScheduledTasks
         }
 
         /// <summary>
-        /// Stops waiting for the trigger action
+        /// Stops waiting for the trigger action.
         /// </summary>
         public void Stop()
         {
@@ -69,19 +75,11 @@ namespace Emby.Server.Implementations.ScheduledTasks
         }
 
         /// <summary>
-        /// Occurs when [triggered].
-        /// </summary>
-        public event EventHandler<EventArgs> Triggered;
-
-        /// <summary>
         /// Called when [triggered].
         /// </summary>
         private void OnTriggered()
         {
-            if (Triggered != null)
-            {
-                Triggered(this, EventArgs.Empty);
-            }
+            Triggered?.Invoke(this, EventArgs.Empty);
         }
     }
 }

@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -75,7 +77,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
         }
     }
 
-    public class HdHomerunManager : IDisposable
+    public sealed class HdHomerunManager : IDisposable
     {
         public const int HdHomeRunPort = 65001;
 
@@ -103,15 +105,17 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
                     StopStreaming(socket).GetAwaiter().GetResult();
                 }
             }
+
+            GC.SuppressFinalize(this);
         }
 
         public async Task<bool> CheckTunerAvailability(IPAddress remoteIp, int tuner, CancellationToken cancellationToken)
         {
-            using (var client = new TcpClient(new IPEndPoint(remoteIp, HdHomeRunPort)))
-            using (var stream = client.GetStream())
-            {
-                return await CheckTunerAvailability(stream, tuner, cancellationToken).ConfigureAwait(false);
-            }
+            using var client = new TcpClient();
+            client.Connect(remoteIp, HdHomeRunPort);
+
+            using var stream = client.GetStream();
+            return await CheckTunerAvailability(stream, tuner, cancellationToken).ConfigureAwait(false);
         }
 
         private static async Task<bool> CheckTunerAvailability(NetworkStream stream, int tuner, CancellationToken cancellationToken)
@@ -138,7 +142,8 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
         {
             _remoteEndPoint = new IPEndPoint(remoteIp, HdHomeRunPort);
 
-            _tcpClient = new TcpClient(_remoteEndPoint);
+            _tcpClient = new TcpClient();
+            _tcpClient.Connect(_remoteEndPoint);
 
             if (!_lockkey.HasValue)
             {
@@ -160,7 +165,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
                     }
 
                     _activeTuner = i;
-                    var lockKeyString = string.Format("{0:d}", lockKeyValue);
+                    var lockKeyString = string.Format(CultureInfo.InvariantCulture, "{0:d}", lockKeyValue);
                     var lockkeyMsg = CreateSetMessage(i, "lockkey", lockKeyString, null);
                     await stream.WriteAsync(lockkeyMsg, 0, lockkeyMsg.Length, cancellationToken).ConfigureAwait(false);
                     int receivedBytes = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
@@ -171,8 +176,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
                         continue;
                     }
 
-                    var commandList = commands.GetCommands();
-                    foreach (var command in commandList)
+                    foreach (var command in commands.GetCommands())
                     {
                         var channelMsg = CreateSetMessage(i, command.Item1, command.Item2, lockKeyValue);
                         await stream.WriteAsync(channelMsg, 0, channelMsg.Length, cancellationToken).ConfigureAwait(false);
@@ -186,7 +190,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
                         }
                     }
 
-                    var targetValue = string.Format("rtp://{0}:{1}", localIp, localPort);
+                    var targetValue = string.Format(CultureInfo.InvariantCulture, "rtp://{0}:{1}", localIp, localPort);
                     var targetMsg = CreateSetMessage(i, "target", targetValue, lockKeyValue);
 
                     await stream.WriteAsync(targetMsg, 0, targetMsg.Length, cancellationToken).ConfigureAwait(false);
@@ -218,30 +222,30 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
                 return;
             }
 
-            using (var tcpClient = new TcpClient(_remoteEndPoint))
-            using (var stream = tcpClient.GetStream())
-            {
-                var commandList = commands.GetCommands();
-                byte[] buffer = ArrayPool<byte>.Shared.Rent(8192);
-                try
-                {
-                    foreach (var command in commandList)
-                    {
-                        var channelMsg = CreateSetMessage(_activeTuner, command.Item1, command.Item2, _lockkey);
-                        await stream.WriteAsync(channelMsg, 0, channelMsg.Length, cancellationToken).ConfigureAwait(false);
-                        int receivedBytes = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+            using var tcpClient = new TcpClient();
+            tcpClient.Connect(_remoteEndPoint);
 
-                        // parse response to make sure it worked
-                        if (!ParseReturnMessage(buffer, receivedBytes, out _))
-                        {
-                            return;
-                        }
+            using var stream = tcpClient.GetStream();
+            var commandList = commands.GetCommands();
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(8192);
+            try
+            {
+                foreach (var command in commandList)
+                {
+                    var channelMsg = CreateSetMessage(_activeTuner, command.Item1, command.Item2, _lockkey);
+                    await stream.WriteAsync(channelMsg, 0, channelMsg.Length, cancellationToken).ConfigureAwait(false);
+                    int receivedBytes = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+
+                    // parse response to make sure it worked
+                    if (!ParseReturnMessage(buffer, receivedBytes, out _))
+                    {
+                        return;
                     }
                 }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(buffer);
-                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
         }
 

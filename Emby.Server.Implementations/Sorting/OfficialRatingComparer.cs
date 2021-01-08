@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Sorting;
@@ -16,6 +18,12 @@ namespace Emby.Server.Implementations.Sorting
         }
 
         /// <summary>
+        /// Gets the name.
+        /// </summary>
+        /// <value>The name.</value>
+        public string Name => ItemSortBy.OfficialRating;
+
+        /// <summary>
         /// Compares the specified x.
         /// </summary>
         /// <param name="x">The x.</param>
@@ -24,21 +32,19 @@ namespace Emby.Server.Implementations.Sorting
         public int Compare(BaseItem x, BaseItem y)
         {
             if (x == null)
+            {
                 throw new ArgumentNullException(nameof(x));
+            }
 
             if (y == null)
+            {
                 throw new ArgumentNullException(nameof(y));
+            }
 
             var levelX = string.IsNullOrEmpty(x.OfficialRating) ? 0 : _localization.GetRatingLevel(x.OfficialRating) ?? 0;
             var levelY = string.IsNullOrEmpty(y.OfficialRating) ? 0 : _localization.GetRatingLevel(y.OfficialRating) ?? 0;
 
             return levelX.CompareTo(levelY);
         }
-
-        /// <summary>
-        /// Gets the name.
-        /// </summary>
-        /// <value>The name.</value>
-        public string Name => ItemSortBy.OfficialRating;
     }
 }

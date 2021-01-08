@@ -1,17 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
-using MediaBrowser.Common.Plugins;
-using MediaBrowser.Model.Updates;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace MediaBrowser.Common
 {
     /// <summary>
-    /// An interface to be implemented by the applications hosting a kernel
+    /// Delegate used with GetExports{T}.
+    /// </summary>
+    /// <param name="type">Type to create.</param>
+    /// <returns>New instance of type <param>type</param>.</returns>
+    public delegate object CreationDelegate(Type type);
+
+    /// <summary>
+    /// An interface to be implemented by the applications hosting a kernel.
     /// </summary>
     public interface IApplicationHost
     {
+        /// <summary>
+        /// Occurs when [has pending restart changed].
+        /// </summary>
+        event EventHandler HasPendingRestartChanged;
+
         /// <summary>
         /// Gets the name.
         /// </summary>
@@ -25,13 +35,13 @@ namespace MediaBrowser.Common
         string SystemId { get; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether this instance has pending kernel reload.
+        /// Gets a value indicating whether this instance has pending kernel reload.
         /// </summary>
         /// <value><c>true</c> if this instance has pending kernel reload; otherwise, <c>false</c>.</value>
         bool HasPendingRestart { get; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether this instance is currently shutting down.
+        /// Gets a value indicating whether this instance is currently shutting down.
         /// </summary>
         /// <value><c>true</c> if this instance is shutting down; otherwise, <c>false</c>.</value>
         bool IsShuttingDown { get; }
@@ -43,31 +53,21 @@ namespace MediaBrowser.Common
         bool CanSelfRestart { get; }
 
         /// <summary>
-        /// Get the version class of the system.
+        /// Gets the application version.
         /// </summary>
-        /// <value><see cref="PackageVersionClass.Release" /> or <see cref="PackageVersionClass.Beta" />.</value>
-        PackageVersionClass SystemUpdateLevel { get; }
+        /// <value>The application version.</value>
+        Version ApplicationVersion { get; }
 
         /// <summary>
-        /// Occurs when [has pending restart changed].
+        /// Gets or sets the service provider.
         /// </summary>
-        event EventHandler HasPendingRestartChanged;
-
-        /// <summary>
-        /// Notifies the pending restart.
-        /// </summary>
-        void NotifyPendingRestart();
-
-        /// <summary>
-        /// Restarts this instance.
-        /// </summary>
-        void Restart();
+        IServiceProvider ServiceProvider { get; set; }
 
         /// <summary>
         /// Gets the application version.
         /// </summary>
         /// <value>The application version.</value>
-        string ApplicationVersion { get; }
+        string ApplicationVersionString { get; }
 
         /// <summary>
         /// Gets the application user agent.
@@ -82,6 +82,22 @@ namespace MediaBrowser.Common
         string ApplicationUserAgentAddress { get; }
 
         /// <summary>
+        /// Gets all plugin assemblies which implement a custom rest api.
+        /// </summary>
+        /// <returns>An <see cref="IEnumerable{Assembly}"/> containing the plugin assemblies.</returns>
+        IEnumerable<Assembly> GetApiPluginAssemblies();
+
+        /// <summary>
+        /// Notifies the pending restart.
+        /// </summary>
+        void NotifyPendingRestart();
+
+        /// <summary>
+        /// Restarts this instance.
+        /// </summary>
+        void Restart();
+
+        /// <summary>
         /// Gets the exports.
         /// </summary>
         /// <typeparam name="T">The type.</typeparam>
@@ -90,33 +106,38 @@ namespace MediaBrowser.Common
         IReadOnlyCollection<T> GetExports<T>(bool manageLifetime = true);
 
         /// <summary>
+        /// Gets the exports.
+        /// </summary>
+        /// <typeparam name="T">The type.</typeparam>
+        /// <param name="defaultFunc">Delegate function that gets called to create the object.</param>
+        /// <param name="manageLifetime">If set to <c>true</c> [manage lifetime].</param>
+        /// <returns><see cref="IReadOnlyCollection{T}" />.</returns>
+        IReadOnlyCollection<T> GetExports<T>(CreationDelegate defaultFunc, bool manageLifetime = true);
+
+        /// <summary>
+        /// Gets the export types.
+        /// </summary>
+        /// <typeparam name="T">The type.</typeparam>
+        /// <returns>IEnumerable{Type}.</returns>
+        IEnumerable<Type> GetExportTypes<T>();
+
+        /// <summary>
         /// Resolves this instance.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The <c>Type</c>.</typeparam>
         /// <returns>``0.</returns>
         T Resolve<T>();
 
         /// <summary>
         /// Shuts down.
         /// </summary>
+        /// <returns>A task.</returns>
         Task Shutdown();
 
         /// <summary>
-        /// Gets the plugins.
+        /// Initializes this instance.
         /// </summary>
-        /// <value>The plugins.</value>
-        IPlugin[] Plugins { get; }
-
-        /// <summary>
-        /// Removes the plugin.
-        /// </summary>
-        /// <param name="plugin">The plugin.</param>
-        void RemovePlugin(IPlugin plugin);
-
-        /// <summary>
-        /// Inits this instance.
-        /// </summary>
-        Task InitAsync(IServiceCollection serviceCollection);
+        void Init();
 
         /// <summary>
         /// Creates the instance.

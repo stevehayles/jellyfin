@@ -7,20 +7,32 @@ using Emby.Naming.Common;
 
 namespace Emby.Naming.Video
 {
+    /// <summary>
+    /// Resolve if file is extra for video.
+    /// </summary>
     public class ExtraResolver
     {
         private readonly NamingOptions _options;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ExtraResolver"/> class.
+        /// </summary>
+        /// <param name="options"><see cref="NamingOptions"/> object containing VideoExtraRules and passed to <see cref="AudioFileParser"/> and <see cref="VideoResolver"/>.</param>
         public ExtraResolver(NamingOptions options)
         {
             _options = options;
         }
 
+        /// <summary>
+        /// Attempts to resolve if file is extra.
+        /// </summary>
+        /// <param name="path">Path to file.</param>
+        /// <returns>Returns <see cref="ExtraResult"/> object.</returns>
         public ExtraResult GetExtraInfo(string path)
         {
             return _options.VideoExtraRules
                 .Select(i => GetExtraInfo(path, i))
-                .FirstOrDefault(i => !string.IsNullOrEmpty(i.ExtraType)) ?? new ExtraResult();
+                .FirstOrDefault(i => i.ExtraType != null) ?? new ExtraResult();
         }
 
         private ExtraResult GetExtraInfo(string path, ExtraRule rule)
@@ -29,7 +41,7 @@ namespace Emby.Naming.Video
 
             if (rule.MediaType == MediaType.Audio)
             {
-                if (!new AudioFileParser(_options).IsAudioFile(path))
+                if (!AudioFileParser.IsAudioFile(path, _options))
                 {
                     return result;
                 }
@@ -40,10 +52,6 @@ namespace Emby.Naming.Video
                 {
                     return result;
                 }
-            }
-            else
-            {
-                return result;
             }
 
             if (rule.RuleType == ExtraRuleType.Filename)
@@ -73,6 +81,15 @@ namespace Emby.Naming.Video
                 var regex = new Regex(rule.Token, RegexOptions.IgnoreCase);
 
                 if (regex.IsMatch(filename))
+                {
+                    result.ExtraType = rule.ExtraType;
+                    result.Rule = rule;
+                }
+            }
+            else if (rule.RuleType == ExtraRuleType.DirectoryName)
+            {
+                var directoryName = Path.GetFileName(Path.GetDirectoryName(path));
+                if (string.Equals(directoryName, rule.Token, StringComparison.OrdinalIgnoreCase))
                 {
                     result.ExtraType = rule.ExtraType;
                     result.Rule = rule;

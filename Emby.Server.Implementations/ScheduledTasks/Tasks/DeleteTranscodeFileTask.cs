@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
@@ -11,38 +13,73 @@ using Microsoft.Extensions.Logging;
 namespace Emby.Server.Implementations.ScheduledTasks.Tasks
 {
     /// <summary>
-    /// Deletes all transcoding temp files
+    /// Deletes all transcoding temp files.
     /// </summary>
     public class DeleteTranscodeFileTask : IScheduledTask, IConfigurableScheduledTask
     {
-        /// <summary>
-        /// Gets or sets the application paths.
-        /// </summary>
-        /// <value>The application paths.</value>
-        private ServerApplicationPaths ApplicationPaths { get; set; }
-
-        private readonly ILogger _logger;
-
+        private readonly ILogger<DeleteTranscodeFileTask> _logger;
+        private readonly IConfigurationManager _configurationManager;
         private readonly IFileSystem _fileSystem;
+        private readonly ILocalizationManager _localization;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="DeleteTranscodeFileTask" /> class.
+        /// Initializes a new instance of the <see cref="DeleteTranscodeFileTask"/> class.
         /// </summary>
-        public DeleteTranscodeFileTask(ServerApplicationPaths appPaths, ILogger logger, IFileSystem fileSystem)
+        /// <param name="logger">Instance of the <see cref="ILogger{DeleteTranscodeFileTask}"/> interface.</param>
+        /// <param name="fileSystem">Instance of the <see cref="IFileSystem"/> interface.</param>
+        /// <param name="configurationManager">Instance of the <see cref="IConfigurationManager"/> interface.</param>
+        /// <param name="localization">Instance of the <see cref="ILocalizationManager"/> interface.</param>
+        public DeleteTranscodeFileTask(
+            ILogger<DeleteTranscodeFileTask> logger,
+            IFileSystem fileSystem,
+            IConfigurationManager configurationManager,
+            ILocalizationManager localization)
         {
-            ApplicationPaths = appPaths;
             _logger = logger;
             _fileSystem = fileSystem;
+            _configurationManager = configurationManager;
+            _localization = localization;
+        }
+
+        /// <inheritdoc />
+        public string Name => _localization.GetLocalizedString("TaskCleanTranscode");
+
+        /// <inheritdoc />
+        public string Description => _localization.GetLocalizedString("TaskCleanTranscodeDescription");
+
+        /// <inheritdoc />
+        public string Category => _localization.GetLocalizedString("TasksMaintenanceCategory");
+
+        /// <inheritdoc />
+        public string Key => "DeleteTranscodeFiles";
+
+        /// <inheritdoc />
+        public bool IsHidden => false;
+
+        /// <inheritdoc />
+        public bool IsEnabled => true;
+
+        /// <inheritdoc />
+        public bool IsLogged => true;
+
+        /// <summary>
+        /// Creates the triggers that define when the task will run.
+        /// </summary>
+        /// <returns>IEnumerable{BaseTaskTrigger}.</returns>
+        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
+        {
+            return new[]
+            {
+                new TaskTriggerInfo
+                {
+                    Type = TaskTriggerInfo.TriggerInterval,
+                    IntervalTicks = TimeSpan.FromHours(24).Ticks
+                }
+            };
         }
 
         /// <summary>
-        /// Creates the triggers that define when the task will run
-        /// </summary>
-        /// <returns>IEnumerable{BaseTaskTrigger}.</returns>
-        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => new List<TaskTriggerInfo>();
-
-        /// <summary>
-        /// Returns the task to be executed
+        /// Returns the task to be executed.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <param name="progress">The progress.</param>
@@ -52,21 +89,13 @@ namespace Emby.Server.Implementations.ScheduledTasks.Tasks
             var minDateModified = DateTime.UtcNow.AddDays(-1);
             progress.Report(50);
 
-            try
-            {
-                DeleteTempFilesFromDirectory(cancellationToken, ApplicationPaths.TranscodingTempPath, minDateModified, progress);
-            }
-            catch (DirectoryNotFoundException)
-            {
-                // No biggie here. Nothing to delete
-            }
+            DeleteTempFilesFromDirectory(cancellationToken, _configurationManager.GetTranscodePath(), minDateModified, progress);
 
             return Task.CompletedTask;
         }
 
-
         /// <summary>
-        /// Deletes the transcoded temp files from directory with a last write time less than a given date
+        /// Deletes the transcoded temp files from directory with a last write time less than a given date.
         /// </summary>
         /// <param name="cancellationToken">The task cancellation token.</param>
         /// <param name="directory">The directory.</param>
@@ -137,19 +166,5 @@ namespace Emby.Server.Implementations.ScheduledTasks.Tasks
                 _logger.LogError(ex, "Error deleting file {path}", path);
             }
         }
-
-        public string Name => "Transcoding temp cleanup";
-
-        public string Description => "Deletes transcoding temp files older than 24 hours.";
-
-        public string Category => "Maintenance";
-
-        public string Key => "DeleteTranscodingTempFiles";
-
-        public bool IsHidden => false;
-
-        public bool IsEnabled => false;
-
-        public bool IsLogged => true;
     }
 }

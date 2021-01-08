@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace MediaBrowser.Model.Entities
 {
     /// <summary>
-    /// Class ProviderIdsExtensions
+    /// Class ProviderIdsExtensions.
     /// </summary>
     public static class ProviderIdsExtensions
     {
@@ -14,29 +14,29 @@ namespace MediaBrowser.Model.Entities
         /// <param name="instance">The instance.</param>
         /// <param name="provider">The provider.</param>
         /// <returns><c>true</c> if [has provider identifier] [the specified instance]; otherwise, <c>false</c>.</returns>
-        public static bool HasProviderId(this IHasProviderIds instance, MetadataProviders provider)
+        public static bool HasProviderId(this IHasProviderIds instance, MetadataProvider provider)
         {
             return !string.IsNullOrEmpty(instance.GetProviderId(provider.ToString()));
         }
 
         /// <summary>
-        /// Gets a provider id
+        /// Gets a provider id.
         /// </summary>
         /// <param name="instance">The instance.</param>
         /// <param name="provider">The provider.</param>
         /// <returns>System.String.</returns>
-        public static string GetProviderId(this IHasProviderIds instance, MetadataProviders provider)
+        public static string? GetProviderId(this IHasProviderIds instance, MetadataProvider provider)
         {
             return instance.GetProviderId(provider.ToString());
         }
 
         /// <summary>
-        /// Gets a provider id
+        /// Gets a provider id.
         /// </summary>
         /// <param name="instance">The instance.</param>
         /// <param name="name">The name.</param>
         /// <returns>System.String.</returns>
-        public static string GetProviderId(this IHasProviderIds instance, string name)
+        public static string? GetProviderId(this IHasProviderIds instance, string name)
         {
             if (instance == null)
             {
@@ -48,12 +48,12 @@ namespace MediaBrowser.Model.Entities
                 return null;
             }
 
-            instance.ProviderIds.TryGetValue(name, out string id);
-            return id;
+            instance.ProviderIds.TryGetValue(name, out string? id);
+            return string.IsNullOrEmpty(id) ? null : id;
         }
 
         /// <summary>
-        /// Sets a provider id
+        /// Sets a provider id.
         /// </summary>
         /// <param name="instance">The instance.</param>
         /// <param name="name">The name.</param>
@@ -89,12 +89,12 @@ namespace MediaBrowser.Model.Entities
         }
 
         /// <summary>
-        /// Sets a provider id
+        /// Sets a provider id.
         /// </summary>
         /// <param name="instance">The instance.</param>
         /// <param name="provider">The provider.</param>
         /// <param name="value">The value.</param>
-        public static void SetProviderId(this IHasProviderIds instance, MetadataProviders provider, string value)
+        public static void SetProviderId(this IHasProviderIds instance, MetadataProvider provider, string value)
         {
             instance.SetProviderId(provider.ToString(), value);
         }

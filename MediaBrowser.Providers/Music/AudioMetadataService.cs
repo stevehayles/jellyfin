@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
@@ -13,17 +15,16 @@ namespace MediaBrowser.Providers.Music
     {
         public AudioMetadataService(
             IServerConfigurationManager serverConfigurationManager,
-            ILogger logger,
+            ILogger<AudioMetadataService> logger,
             IProviderManager providerManager,
             IFileSystem fileSystem,
-            IUserDataManager userDataManager,
             ILibraryManager libraryManager)
-            : base(serverConfigurationManager, logger, providerManager, fileSystem, userDataManager, libraryManager)
+            : base(serverConfigurationManager, logger, providerManager, fileSystem, libraryManager)
         {
         }
 
         /// <inheritdoc />
-        protected override void MergeData(MetadataResult<Audio> source, MetadataResult<Audio> target, MetadataFields[] lockedFields, bool replaceData, bool mergeMetadataSettings)
+        protected override void MergeData(MetadataResult<Audio> source, MetadataResult<Audio> target, MetadataField[] lockedFields, bool replaceData, bool mergeMetadataSettings)
         {
             ProviderUtils.MergeBaseItemData(source, target, lockedFields, replaceData, mergeMetadataSettings);
 

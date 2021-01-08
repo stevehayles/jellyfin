@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -13,12 +15,11 @@ namespace MediaBrowser.Providers.Music
     {
         public MusicVideoMetadataService(
             IServerConfigurationManager serverConfigurationManager,
-            ILogger logger,
+            ILogger<MusicVideoMetadataService> logger,
             IProviderManager providerManager,
             IFileSystem fileSystem,
-            IUserDataManager userDataManager,
             ILibraryManager libraryManager)
-            : base(serverConfigurationManager, logger, providerManager, fileSystem, userDataManager, libraryManager)
+            : base(serverConfigurationManager, logger, providerManager, fileSystem, libraryManager)
         {
         }
 
@@ -26,7 +27,7 @@ namespace MediaBrowser.Providers.Music
         protected override void MergeData(
             MetadataResult<MusicVideo> source,
             MetadataResult<MusicVideo> target,
-            MetadataFields[] lockedFields,
+            MetadataField[] lockedFields,
             bool replaceData,
             bool mergeMetadataSettings)
         {

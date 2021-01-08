@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities.TV;
@@ -12,6 +14,17 @@ namespace MediaBrowser.Providers.TV
 {
     public class EpisodeMetadataService : MetadataService<Episode, EpisodeInfo>
     {
+        public EpisodeMetadataService(
+            IServerConfigurationManager serverConfigurationManager,
+            ILogger<EpisodeMetadataService> logger,
+            IProviderManager providerManager,
+            IFileSystem fileSystem,
+            ILibraryManager libraryManager)
+            : base(serverConfigurationManager, logger, providerManager, fileSystem, libraryManager)
+        {
+        }
+
+        /// <inheritdoc />
         protected override ItemUpdateType BeforeSaveInternal(Episode item, bool isFullRefresh, ItemUpdateType currentUpdateType)
         {
             var updateType = base.BeforeSaveInternal(item, isFullRefresh, currentUpdateType);
@@ -54,7 +67,8 @@ namespace MediaBrowser.Providers.TV
             return updateType;
         }
 
-        protected override void MergeData(MetadataResult<Episode> source, MetadataResult<Episode> target, MetadataFields[] lockedFields, bool replaceData, bool mergeMetadataSettings)
+        /// <inheritdoc />
+        protected override void MergeData(MetadataResult<Episode> source, MetadataResult<Episode> target, MetadataField[] lockedFields, bool replaceData, bool mergeMetadataSettings)
         {
             ProviderUtils.MergeBaseItemData(source, target, lockedFields, replaceData, mergeMetadataSettings);
 
@@ -80,10 +94,6 @@ namespace MediaBrowser.Providers.TV
             {
                 targetItem.IndexNumberEnd = sourceItem.IndexNumberEnd;
             }
-        }
-
-        public EpisodeMetadataService(IServerConfigurationManager serverConfigurationManager, ILogger logger, IProviderManager providerManager, IFileSystem fileSystem, IUserDataManager userDataManager, ILibraryManager libraryManager) : base(serverConfigurationManager, logger, providerManager, fileSystem, userDataManager, libraryManager)
-        {
         }
     }
 }

@@ -1,4 +1,6 @@
-using MediaBrowser.Model.Entities;
+#pragma warning disable CS1591
+
+using Jellyfin.Data.Enums;
 
 namespace MediaBrowser.Model.Dlna
 {
@@ -8,7 +10,6 @@ namespace MediaBrowser.Model.Dlna
 
         public SortCriteria(string value)
         {
-
         }
     }
 }

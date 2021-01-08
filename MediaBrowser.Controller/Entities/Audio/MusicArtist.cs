@@ -1,20 +1,23 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Entities;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Extensions;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Users;
 using Microsoft.Extensions.Logging;
+using MetadataProvider = MediaBrowser.Model.Entities.MetadataProvider;
 
 namespace MediaBrowser.Controller.Entities.Audio
 {
     /// <summary>
-    /// Class MusicArtist
+    /// Class MusicArtist.
     /// </summary>
     public class MusicArtist : Folder, IItemByName, IHasMusicGenres, IHasDualAccess, IHasLookupInfo<ArtistInfo>
     {
@@ -53,7 +56,7 @@ namespace MediaBrowser.Controller.Entities.Audio
         {
             if (query.IncludeItemTypes.Length == 0)
             {
-                query.IncludeItemTypes = new[] { typeof(Audio).Name, typeof(MusicVideo).Name, typeof(MusicAlbum).Name };
+                query.IncludeItemTypes = new[] { nameof(Audio), nameof(MusicVideo), nameof(MusicAlbum) };
                 query.ArtistIds = new[] { Id };
             }
 
@@ -76,11 +79,7 @@ namespace MediaBrowser.Controller.Entities.Audio
 
         public override int GetChildCount(User user)
         {
-            if (IsAccessedByName)
-            {
-                return 0;
-            }
-            return base.GetChildCount(user);
+            return IsAccessedByName ? 0 : base.GetChildCount(user);
         }
 
         public override bool IsSaveLocalMetadataEnabled()
@@ -114,7 +113,7 @@ namespace MediaBrowser.Controller.Entities.Audio
 
         /// <summary>
         /// Returns the folder containing the item.
-        /// If the item is a folder, it returns the folder itself
+        /// If the item is a folder, it returns the folder itself.
         /// </summary>
         /// <value>The containing folder path.</value>
         [JsonIgnore]
@@ -128,7 +127,7 @@ namespace MediaBrowser.Controller.Entities.Audio
         private static List<string> GetUserDataKeys(MusicArtist item)
         {
             var list = new List<string>();
-            var id = item.GetProviderId(MetadataProviders.MusicBrainzArtist);
+            var id = item.GetProviderId(MetadataProvider.MusicBrainzArtist);
 
             if (!string.IsNullOrEmpty(id))
             {
@@ -138,13 +137,15 @@ namespace MediaBrowser.Controller.Entities.Audio
             list.Add("Artist-" + (item.Name ?? string.Empty).RemoveDiacritics());
             return list;
         }
+
         public override string CreatePresentationUniqueKey()
         {
             return "Artist-" + (Name ?? string.Empty).RemoveDiacritics();
         }
-        protected override bool GetBlockUnratedValue(UserPolicy config)
+
+        protected override bool GetBlockUnratedValue(User user)
         {
-            return config.BlockUnratedItems.Contains(UnratedItem.Music);
+            return user.GetPreferenceValues<UnratedItem>(PreferenceKind.BlockUnratedItems).Contains(UnratedItem.Music);
         }
 
         public override UnratedItem GetBlockUnratedType()
@@ -198,11 +199,12 @@ namespace MediaBrowser.Controller.Entities.Audio
                     return true;
                 }
             }
+
             return base.RequiresRefresh();
         }
 
         /// <summary>
-        /// This is called before any metadata refresh and returns true or false indicating if changes were made
+        /// This is called before any metadata refresh and returns true or false indicating if changes were made.
         /// </summary>
         public override bool BeforeMetadataRefresh(bool replaceAllMetdata)
         {

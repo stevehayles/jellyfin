@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
 
@@ -16,6 +18,7 @@ namespace MediaBrowser.Controller.Providers
         /// </summary>
         /// <value>The artist provider ids.</value>
         public Dictionary<string, string> ArtistProviderIds { get; set; }
+
         public List<SongInfo> SongInfos { get; set; }
 
         public AlbumInfo()

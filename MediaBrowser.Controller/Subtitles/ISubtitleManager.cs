@@ -1,5 +1,8 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
@@ -24,7 +27,8 @@ namespace MediaBrowser.Controller.Subtitles
         /// <summary>
         /// Searches the subtitles.
         /// </summary>
-        Task<RemoteSubtitleInfo[]> SearchSubtitles(Video video,
+        Task<RemoteSubtitleInfo[]> SearchSubtitles(
+            Video video,
             string language,
             bool? isPerfectMatch,
             CancellationToken cancellationToken);
@@ -34,8 +38,9 @@ namespace MediaBrowser.Controller.Subtitles
         /// </summary>
         /// <param name="request">The request.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>Task{IEnumerable{RemoteSubtitleInfo}}.</returns>
-        Task<RemoteSubtitleInfo[]> SearchSubtitles(SubtitleSearchRequest request,
+        /// <returns>Task{RemoteSubtitleInfo[]}.</returns>
+        Task<RemoteSubtitleInfo[]> SearchSubtitles(
+            SubtitleSearchRequest request,
             CancellationToken cancellationToken);
 
         /// <summary>
@@ -49,11 +54,19 @@ namespace MediaBrowser.Controller.Subtitles
         Task DownloadSubtitles(Video video, LibraryOptions libraryOptions, string subtitleId, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Upload new subtitle.
+        /// </summary>
+        /// <param name="video">The video the subtitle belongs to.</param>
+        /// <param name="response">The subtitle response.</param>
+        /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+        Task UploadSubtitle(Video video, SubtitleResponse response);
+
+        /// <summary>
         /// Gets the remote subtitles.
         /// </summary>
         /// <param name="id">The identifier.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>Task{SubtitleResponse}.</returns>
+        /// <returns><see cref="Task{SubtitleResponse}" />.</returns>
         Task<SubtitleResponse> GetRemoteSubtitles(string id, CancellationToken cancellationToken);
 
         /// <summary>

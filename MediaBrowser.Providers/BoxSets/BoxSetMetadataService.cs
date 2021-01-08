@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System.Collections.Generic;
 using System.Linq;
 using MediaBrowser.Controller.Configuration;
@@ -14,12 +16,36 @@ namespace MediaBrowser.Providers.BoxSets
 {
     public class BoxSetMetadataService : MetadataService<BoxSet, BoxSetInfo>
     {
+        public BoxSetMetadataService(
+            IServerConfigurationManager serverConfigurationManager,
+            ILogger<BoxSetMetadataService> logger,
+            IProviderManager providerManager,
+            IFileSystem fileSystem,
+            ILibraryManager libraryManager)
+            : base(serverConfigurationManager, logger, providerManager, fileSystem, libraryManager)
+        {
+        }
+
+        /// <inheritdoc />
+        protected override bool EnableUpdatingGenresFromChildren => true;
+
+        /// <inheritdoc />
+        protected override bool EnableUpdatingOfficialRatingFromChildren => true;
+
+        /// <inheritdoc />
+        protected override bool EnableUpdatingStudiosFromChildren => true;
+
+        /// <inheritdoc />
+        protected override bool EnableUpdatingPremiereDateFromChildren => true;
+
+        /// <inheritdoc />
         protected override IList<BaseItem> GetChildrenForMetadataUpdates(BoxSet item)
         {
             return item.GetLinkedChildren();
         }
 
-        protected override void MergeData(MetadataResult<BoxSet> source, MetadataResult<BoxSet> target, MetadataFields[] lockedFields, bool replaceData, bool mergeMetadataSettings)
+        /// <inheritdoc />
+        protected override void MergeData(MetadataResult<BoxSet> source, MetadataResult<BoxSet> target, MetadataField[] lockedFields, bool replaceData, bool mergeMetadataSettings)
         {
             ProviderUtils.MergeBaseItemData(source, target, lockedFields, replaceData, mergeMetadataSettings);
 
@@ -32,6 +58,7 @@ namespace MediaBrowser.Providers.BoxSets
             }
         }
 
+        /// <inheritdoc />
         protected override ItemUpdateType BeforeSaveInternal(BoxSet item, bool isFullRefresh, ItemUpdateType currentUpdateType)
         {
             var updateType = base.BeforeSaveInternal(item, isFullRefresh, currentUpdateType);
@@ -47,17 +74,5 @@ namespace MediaBrowser.Providers.BoxSets
 
             return updateType;
         }
-
-        public BoxSetMetadataService(IServerConfigurationManager serverConfigurationManager, ILogger logger, IProviderManager providerManager, IFileSystem fileSystem, IUserDataManager userDataManager, ILibraryManager libraryManager) : base(serverConfigurationManager, logger, providerManager, fileSystem, userDataManager, libraryManager)
-        {
-        }
-
-        protected override bool EnableUpdatingGenresFromChildren => true;
-
-        protected override bool EnableUpdatingOfficialRatingFromChildren => true;
-
-        protected override bool EnableUpdatingStudiosFromChildren => true;
-
-        protected override bool EnableUpdatingPremiereDateFromChildren => true;
     }
 }

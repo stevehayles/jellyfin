@@ -1,8 +1,11 @@
+#pragma warning disable CS1591
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
+using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -10,12 +13,13 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
-using Microsoft.Extensions.Logging;
+using Book = MediaBrowser.Controller.Entities.Book;
+using AudioBook = MediaBrowser.Controller.Entities.AudioBook;
 
 namespace Emby.Server.Implementations.Library
 {
     /// <summary>
-    /// Class UserDataManager
+    /// Class UserDataManager.
     /// </summary>
     public class UserDataManager : IUserDataManager
     {
@@ -24,27 +28,23 @@ namespace Emby.Server.Implementations.Library
         private readonly ConcurrentDictionary<string, UserItemData> _userData =
             new ConcurrentDictionary<string, UserItemData>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly ILogger _logger;
         private readonly IServerConfigurationManager _config;
+        private readonly IUserManager _userManager;
+        private readonly IUserDataRepository _repository;
 
-        private Func<IUserManager> _userManager;
-
-        public UserDataManager(ILoggerFactory loggerFactory, IServerConfigurationManager config, Func<IUserManager> userManager)
+        public UserDataManager(
+            IServerConfigurationManager config,
+            IUserManager userManager,
+            IUserDataRepository repository)
         {
             _config = config;
-            _logger = loggerFactory.CreateLogger(GetType().Name);
             _userManager = userManager;
+            _repository = repository;
         }
-
-        /// <summary>
-        /// Gets or sets the repository.
-        /// </summary>
-        /// <value>The repository.</value>
-        public IUserDataRepository Repository { get; set; }
 
         public void SaveUserData(Guid userId, BaseItem item, UserItemData userData, UserDataSaveReason reason, CancellationToken cancellationToken)
         {
-            var user = _userManager().GetUserById(userId);
+            var user = _userManager.GetUserById(userId);
 
             SaveUserData(user, item, userData, reason, cancellationToken);
         }
@@ -55,6 +55,7 @@ namespace Emby.Server.Implementations.Library
             {
                 throw new ArgumentNullException(nameof(userData));
             }
+
             if (item == null)
             {
                 throw new ArgumentNullException(nameof(item));
@@ -68,7 +69,7 @@ namespace Emby.Server.Implementations.Library
 
             foreach (var key in keys)
             {
-                Repository.SaveUserData(userId, key, userData, cancellationToken);
+                _repository.SaveUserData(userId, key, userData, cancellationToken);
             }
 
             var cacheKey = GetCacheKey(userId, item.Id);
@@ -93,26 +94,26 @@ namespace Emby.Server.Implementations.Library
         /// <returns></returns>
         public void SaveAllUserData(Guid userId, UserItemData[] userData, CancellationToken cancellationToken)
         {
-            var user = _userManager().GetUserById(userId);
+            var user = _userManager.GetUserById(userId);
 
-            Repository.SaveAllUserData(user.InternalId, userData, cancellationToken);
+            _repository.SaveAllUserData(user.InternalId, userData, cancellationToken);
         }
 
         /// <summary>
-        /// Retrieve all user data for the given user
+        /// Retrieve all user data for the given user.
         /// </summary>
         /// <param name="userId"></param>
         /// <returns></returns>
         public List<UserItemData> GetAllUserData(Guid userId)
         {
-            var user = _userManager().GetUserById(userId);
+            var user = _userManager.GetUserById(userId);
 
-            return Repository.GetAllUserData(user.InternalId);
+            return _repository.GetAllUserData(user.InternalId);
         }
 
         public UserItemData GetUserData(Guid userId, Guid itemId, List<string> keys)
         {
-            var user = _userManager().GetUserById(userId);
+            var user = _userManager.GetUserById(userId);
 
             return GetUserData(user, itemId, keys);
         }
@@ -128,7 +129,7 @@ namespace Emby.Server.Implementations.Library
 
         private UserItemData GetUserDataInternal(long internalUserId, List<string> keys)
         {
-            var userData = Repository.GetUserData(internalUserId, keys);
+            var userData = _repository.GetUserData(internalUserId, keys);
 
             if (userData != null)
             {
@@ -160,11 +161,6 @@ namespace Emby.Server.Implementations.Library
             return GetUserData(user, item.Id, item.GetUserDataKeys());
         }
 
-        public UserItemData GetUserData(string userId, BaseItem item)
-        {
-            return GetUserData(new Guid(userId), item);
-        }
-
         public UserItemData GetUserData(Guid userId, BaseItem item)
         {
             return GetUserData(userId, item.Id, item.GetUserDataKeys());
@@ -189,7 +185,7 @@ namespace Emby.Server.Implementations.Library
         }
 
         /// <summary>
-        /// Converts a UserItemData to a DTOUserItemData
+        /// Converts a UserItemData to a DTOUserItemData.
         /// </summary>
         /// <param name="data">The data.</param>
         /// <returns>DtoUserItemData.</returns>
@@ -224,33 +220,47 @@ namespace Emby.Server.Implementations.Library
             var hasRuntime = runtimeTicks > 0;
 
             // If a position has been reported, and if we know the duration
-            if (positionTicks > 0 && hasRuntime)
+            if (positionTicks > 0 && hasRuntime && !(item is AudioBook))
             {
                 var pctIn = decimal.Divide(positionTicks, runtimeTicks) * 100;
 
-                // Don't track in very beginning
                 if (pctIn < _config.Configuration.MinResumePct)
                 {
+                    // ignore progress during the beginning
                     positionTicks = 0;
                 }
-
-                // If we're at the end, assume completed
                 else if (pctIn > _config.Configuration.MaxResumePct || positionTicks >= runtimeTicks)
                 {
+                    // mark as completed close to the end
                     positionTicks = 0;
                     data.Played = playedToCompletion = true;
                 }
-
                 else
                 {
                     // Enforce MinResumeDuration
                     var durationSeconds = TimeSpan.FromTicks(runtimeTicks).TotalSeconds;
-
-                    if (durationSeconds < _config.Configuration.MinResumeDurationSeconds)
+                    if (durationSeconds < _config.Configuration.MinResumeDurationSeconds && !(item is Book))
                     {
                         positionTicks = 0;
                         data.Played = playedToCompletion = true;
                     }
+                }
+            }
+            else if (positionTicks > 0 && hasRuntime && item is AudioBook)
+            {
+                var minIn = TimeSpan.FromTicks(positionTicks).TotalMinutes;
+                var minOut = TimeSpan.FromTicks(runtimeTicks - positionTicks).TotalMinutes;
+
+                if (minIn > _config.Configuration.MinAudiobookResume)
+                {
+                    // ignore progress during the beginning
+                    positionTicks = 0;
+                }
+                else if (minOut < _config.Configuration.MaxAudiobookResume || positionTicks >= runtimeTicks)
+                {
+                    // mark as completed close to the end
+                    positionTicks = 0;
+                    data.Played = playedToCompletion = true;
                 }
             }
             else if (!hasRuntime)
@@ -265,6 +275,7 @@ namespace Emby.Server.Implementations.Library
                 positionTicks = 0;
                 data.Played = false;
             }
+
             if (!item.SupportsPositionTicksResume)
             {
                 positionTicks = 0;

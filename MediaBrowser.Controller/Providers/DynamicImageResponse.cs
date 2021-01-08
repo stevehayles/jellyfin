@@ -1,3 +1,5 @@
+#pragma warning disable CS1591
+
 using System;
 using System.IO;
 using MediaBrowser.Model.Drawing;
@@ -8,9 +10,13 @@ namespace MediaBrowser.Controller.Providers
     public class DynamicImageResponse
     {
         public string Path { get; set; }
+
         public MediaProtocol Protocol { get; set; }
+
         public Stream Stream { get; set; }
+
         public ImageFormat Format { get; set; }
+
         public bool HasImage { get; set; }
 
         public void SetFormatFromMimeType(string mimeType)

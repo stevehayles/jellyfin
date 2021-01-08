@@ -11,8 +11,17 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaBrowser.XbmcMetadata.Parsers
 {
+    /// <summary>
+    /// Nfo parser for movies.
+    /// </summary>
     public class MovieNfoParser : BaseNfoParser<Video>
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MovieNfoParser"/> class.
+        /// </summary>
+        /// <param name="logger">The logger.</param>
+        /// <param name="config">the configuration manager.</param>
+        /// <param name="providerManager">The provider manager.</param>
         public MovieNfoParser(ILogger logger, IConfigurationManager config, IProviderManager providerManager)
             : base(logger, config, providerManager)
         {
@@ -30,8 +39,8 @@ namespace MediaBrowser.XbmcMetadata.Parsers
             {
                 case "id":
                     {
-                        string imdbId = reader.GetAttribute("IMDB");
-                        string tmdbId = reader.GetAttribute("TMDB");
+                        string? imdbId = reader.GetAttribute("IMDB");
+                        string? tmdbId = reader.GetAttribute("TMDB");
 
                         if (string.IsNullOrWhiteSpace(imdbId))
                         {
@@ -40,16 +49,17 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
                         if (!string.IsNullOrWhiteSpace(imdbId))
                         {
-                            item.SetProviderId(MetadataProviders.Imdb, imdbId);
+                            item.SetProviderId(MetadataProvider.Imdb, imdbId);
                         }
 
                         if (!string.IsNullOrWhiteSpace(tmdbId))
                         {
-                            item.SetProviderId(MetadataProviders.Tmdb, tmdbId);
+                            item.SetProviderId(MetadataProvider.Tmdb, tmdbId);
                         }
 
                         break;
                     }
+
                 case "set":
                     {
                         var movie = item as Movie;
@@ -57,7 +67,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         var tmdbcolid = reader.GetAttribute("tmdbcolid");
                         if (!string.IsNullOrWhiteSpace(tmdbcolid) && movie != null)
                         {
-                            movie.SetProviderId(MetadataProviders.TmdbCollection, tmdbcolid);
+                            movie.SetProviderId(MetadataProvider.TmdbCollection, tmdbcolid);
                         }
 
                         var val = reader.ReadInnerXml();
@@ -65,7 +75,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         if (!string.IsNullOrWhiteSpace(val) && movie != null)
                         {
                             // TODO Handle this better later
-                            if (val.IndexOf('<') == -1)
+                            if (val.IndexOf('<', StringComparison.Ordinal) == -1)
                             {
                                 movie.CollectionName = val;
                             }
@@ -119,9 +129,6 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
         private void ParseSetXml(string xml, Movie movie)
         {
-            //xml = xml.Substring(xml.IndexOf('<'));
-            //xml = xml.Substring(0, xml.LastIndexOf('>'));
-
             // These are not going to be valid xml so no sense in causing the provider to fail and spamming the log with exceptions
             try
             {
@@ -155,7 +162,6 @@ namespace MediaBrowser.XbmcMetadata.Parsers
             }
             catch (XmlException)
             {
-
             }
         }
     }
