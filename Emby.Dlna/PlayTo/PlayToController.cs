@@ -159,7 +159,7 @@ namespace Emby.Dlna.PlayTo
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error reporting progress in method {nameof(_device_MediaChanged)} for mediaUrl {e.NewMediaInfo.Url}");
+                _logger.LogError(ex, $"Error reporting progress in method {nameof(OnDeviceMediaChanged)} for mediaUrl {e.NewMediaInfo.Url}");
             }
         }
 
@@ -252,7 +252,7 @@ namespace Emby.Dlna.PlayTo
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error reporting progress in method {nameof(_device_PlaybackStart)} for mediaUrl {e.MediaInfo.Url}");
+                _logger.LogError(ex, $"Error reporting progress in method {nameof(OnDevicePlaybackStart)} for mediaUrl {e.MediaInfo.Url}");
             }
         }
 
@@ -283,7 +283,7 @@ namespace Emby.Dlna.PlayTo
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error reporting progress in method {nameof(_device_PlaybackProgress)} for mediaUrl {e.MediaInfo.Url}");
+                _logger.LogError(ex, $"Error reporting progress in method {nameof(OnDevicePlaybackProgress)} for mediaUrl {e.MediaInfo.Url}");
             }
         }
 
